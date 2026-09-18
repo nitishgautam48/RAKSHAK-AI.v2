@@ -1,0 +1,52 @@
+services:
+  ai-service:
+    build: ./ai-service
+    environment:
+      ENVIRONMENT: production
+      SERVICE_KEY: ${AI_SERVICE_KEY:-change-me-shared-secret}
+      STT_PROVIDER: operator_transcript
+    volumes:
+      - ai_data:/app/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build: ./server
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: file:./data/traumasense.db
+      JWT_SECRET: ${JWT_SECRET:-change-me-jwt-secret}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-change-me-32-byte-encryption-key}
+      AI_SERVICE_URL: http://ai-service:8000
+      AI_SERVICE_KEY: ${AI_SERVICE_KEY:-change-me-shared-secret}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      OTP_DEV_MODE: "false"
+    volumes:
+      - server_data:/app/data
+      - server_storage:/app/storage
+    ports:
+      - "4000:4000"
+    depends_on:
+      ai-service:
+        condition: service_healthy
+
+  app:
+    build:
+      context: ./app
+      args:
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:4000}
+    ports:
+      - "8080:80"
+    depends_on:
+      - server
+
+volumes:
+  ai_data:
+  server_data:
+  server_storage:

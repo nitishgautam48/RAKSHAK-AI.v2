@@ -1,0 +1,81 @@
+import { useAssessmentSelector } from '../lib/useAssessmentSelector';
+import ComplaintSelector from '../components/ComplaintSelector';
+
+const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
+
+function scoreLevel(v) {
+  if (v >= 75) return { label: 'Critical', color: 'oklch(0.62 0.21 25)', bg: 'oklch(0.62 0.21 25 / 0.12)' };
+  if (v >= 55) return { label: 'High', color: 'oklch(0.7 0.17 55)', bg: 'oklch(0.7 0.17 55 / 0.12)' };
+  if (v >= 30) return { label: 'Moderate', color: 'oklch(0.8 0.15 95)', bg: 'oklch(0.8 0.15 95 / 0.12)' };
+  return { label: 'Low', color: 'oklch(0.72 0.15 145)', bg: 'oklch(0.72 0.15 145 / 0.12)' };
+}
+
+export default function NlpAnalysis() {
+  const { complaints, selectedId, setSelectedId, complaint, engineOutputs, loading } = useAssessmentSelector();
+  const nlp = engineOutputs.nlp;
+
+  const indicators = nlp ? [
+    ['Trauma', nlp.traumaScore], ['Fear', nlp.fearScore], ['Threat', nlp.threatScore],
+    ['Isolation', nlp.isolationScore], ['Hopelessness', nlp.hopelessnessScore], ['Vulnerability', nlp.vulnerabilityScore],
+  ] : [];
+
+  return (
+    <div className="tsa-fade">
+      <ComplaintSelector complaints={complaints} selectedId={selectedId} onChange={setSelectedId} />
+      {loading && <div style={{ color: '#7d8399', fontSize: 13 }}>Loading…</div>}
+
+      {!loading && complaint && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={card}>
+              <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 12 }}>Victim Narrative</div>
+              <div style={{ fontSize: 13, lineHeight: 1.7, color: '#c4c8d4', background: 'rgba(255,255,255,.03)', borderRadius: 10, padding: 16 }}>{complaint.narrative}</div>
+            </div>
+
+            {nlp && (
+              <div className="tsa-card-hover" style={card}>
+                <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 4 }}>Matched Indicator Keywords</div>
+                <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>English + Hindi lexicon scorer &middot; {nlp.wordCount} words analyzed</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 10px' }}>
+                  {nlp.matchedKeywords.length === 0 && <div style={{ color: '#5c6178', fontSize: 12.5 }}>No indicator keywords matched in this narrative.</div>}
+                  {nlp.matchedKeywords.map((kw) => (
+                    <div key={kw} style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(255,255,255,.06)', fontSize: 12.5, color: '#eef0f6' }}>{kw}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {nlp?.suicidalIdeationFlag && (
+              <div style={{ background: 'oklch(0.62 0.21 25 / 0.12)', border: '1px solid oklch(0.62 0.21 25 / 0.35)', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(0.75 0.18 25)', marginBottom: 4 }}>Suicidal Ideation Language Flagged</div>
+                <div style={{ fontSize: 12.5, color: '#eef0f6' }}>The narrative matched language patterns associated with suicidal ideation. This requires immediate human review - it is a keyword flag, not a diagnosis.</div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {nlp ? (
+              <div style={card}>
+                <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 4 }}>NLP Category Scores</div>
+                <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>Confidence {nlp.confidence}%</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {indicators.map(([label, value]) => {
+                    const lvl = scoreLevel(value);
+                    return (
+                      <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: 9, background: lvl.bg }}>
+                        <div style={{ fontSize: 13, color: '#eef0f6' }}>{label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: lvl.color }}>{lvl.label} ({Math.round(value)})</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div style={{ ...card, textAlign: 'center', color: '#7d8399' }}>No AI assessment has been run for this complaint yet.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

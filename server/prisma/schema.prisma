@@ -1,0 +1,709 @@
+// TraumaSense AI - primary relational schema.
+// Provider is SQLite for this deployment; every field type and relation is
+// chosen to be PostgreSQL-compatible so `provider = "postgresql"` plus a
+// `DATABASE_URL` change is the entire migration (see server/README.md).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity, roles, permissions
+// ---------------------------------------------------------------------------
+
+enum UserType {
+  GOVERNMENT
+  SURVIVOR
+}
+
+enum RoleName {
+  VICTIM
+  SURVIVOR
+  FAMILY_MEMBER
+  HELPLINE_OPERATOR
+  COUNSELLOR
+  POLICE_OFFICER
+  DISTRICT_OFFICER
+  LEGAL_OFFICER
+  SOCIAL_JUSTICE_OFFICER
+  ADMINISTRATOR
+  STATE_ADMINISTRATOR
+  MINISTRY_OFFICIAL
+}
+
+model Role {
+  id          String       @id @default(cuid())
+  name        RoleName     @unique
+  description String
+  permissions Permission[] @relation("RolePermissions")
+  users       User[]
+  createdAt   DateTime     @default(now())
+}
+
+model Permission {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g. "complaints:write", "cases:assign"
+  label     String
+  roles     Role[]   @relation("RolePermissions")
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id           String    @id @default(cuid())
+  userType     UserType
+  roleId       String
+  role         Role      @relation(fields: [roleId], references: [id])
+  email        String?   @unique
+  employeeId   String?   @unique
+  department   String?
+  passwordHash String?
+  mobileNumber String?   @unique
+  fullName     String
+  designation  String?
+  district     String?
+  state        String?
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  victimProfile       VictimProfile?
+  assignedCases       CaseAssignment[]
+  counsellingLed      CounsellingSession[] @relation("CounsellorUser")
+  documentsUploaded   Document[]           @relation("DocumentUploader")
+  caseTimelineEntries CaseTimeline[]       @relation("TimelineActor")
+  notifications       Notification[]
+  messagesSent        Message[]            @relation("MessageSender")
+  auditLogs           AuditLog[]
+  consentRecords      ConsentRecord[]
+  otpChallenges       OtpChallenge[]
+  assessmentReviews   AssessmentReview[]
+}
+
+// One-time-password challenges for survivor mobile/case-id login.
+// In this environment there is no SMS gateway credential, so the dev
+// NotificationService logs the code server-side instead of sending it;
+// the interface is provider-ready (see src/services/notification.service.ts).
+model OtpChallenge {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  target    String // mobile number or case id
+  channel   String // "mobile" | "case_id"
+  codeHash  String
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Victims
+// ---------------------------------------------------------------------------
+
+enum Gender {
+  FEMALE
+  MALE
+  OTHER
+  UNDISCLOSED
+}
+
+model Victim {
+  id           String   @id @default(cuid())
+  displayCode  String   @unique // e.g. "V-88231" - never the legal name, used in gov UI
+  fullNameEnc  String // Fernet-style encrypted at rest
+  age          Int?
+  gender       Gender?
+  community    String? // SC / ST / other, self-reported
+  state        String
+  district     String
+  subDistrict  String?
+  village      String?
+  languagePref String   @default("English")
+  contactEnc   String? // encrypted phone
+  addressEnc   String? // encrypted address
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile        VictimProfile?
+  complaints     Complaint[]
+  cases          Case[]
+  assessments    Assessment[]
+  documents      Document[]
+  legalAid       LegalAidRecord[]
+  counselling    CounsellingSession[]
+  recovery       RecoveryMilestone[]
+  sos            SOSRequest[]
+  consentRecords ConsentRecord[]
+}
+
+// Links a logged-in survivor User to their Victim case record.
+model VictimProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  victimId      String   @unique
+  victim        Victim   @relation(fields: [victimId], references: [id])
+  recoveryStage Int      @default(1)
+  recoveryTotal Int      @default(5)
+  statusLabel   String   @default("Case registered")
+  createdAt     DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Complaints / Cases
+// ---------------------------------------------------------------------------
+
+enum ComplaintStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  ASSIGNED
+  UNDER_INVESTIGATION
+  ESCALATED
+  CLOSED
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+model Complaint {
+  id           String          @id @default(cuid())
+  code         String          @unique // e.g. "TC-4471"
+  victimId     String
+  victim       Victim          @relation(fields: [victimId], references: [id])
+  incidentType String
+  narrative    String
+  channel      String          @default("helpline") // helpline | portal | field-visit
+  state        String
+  district     String
+  status       ComplaintStatus @default(SUBMITTED)
+  riskLevel    RiskLevel       @default(MODERATE)
+  officerId    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  case        Case?
+  assessments Assessment[]
+  documents   Document[]
+  sos         SOSRequest[]
+}
+
+model Case {
+  id          String          @id @default(cuid())
+  caseNumber  String          @unique
+  complaintId String          @unique
+  complaint   Complaint       @relation(fields: [complaintId], references: [id])
+  victimId    String
+  victim      Victim          @relation(fields: [victimId], references: [id])
+  status      ComplaintStatus @default(ASSIGNED)
+  riskLevel   RiskLevel       @default(MODERATE)
+  openedAt    DateTime        @default(now())
+  closedAt    DateTime?
+
+  assignments   CaseAssignment[]
+  timeline      CaseTimeline[]
+  assessments   Assessment[]
+  legalAid      LegalAidRecord[]
+  interventions Intervention[]
+}
+
+enum AssignmentRole {
+  INVESTIGATING_OFFICER
+  COUNSELLOR
+  LEGAL_OFFICER
+  DISTRICT_OFFICER
+  SOCIAL_JUSTICE_OFFICER
+}
+
+model CaseAssignment {
+  id         String         @id @default(cuid())
+  caseId     String
+  case       Case           @relation(fields: [caseId], references: [id])
+  userId     String
+  user       User           @relation(fields: [userId], references: [id])
+  role       AssignmentRole
+  assignedAt DateTime       @default(now())
+  active     Boolean        @default(true)
+}
+
+model CaseTimeline {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+  actorId   String?
+  actor     User?    @relation("TimelineActor", fields: [actorId], references: [id])
+  eventType String // "status_change" | "note" | "assignment" | "ai_assessment" | "document" | "legal" | "counselling"
+  summary   String
+  metaJson  String? // serialized JSON payload for structured detail
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Voice / Video recordings, Documents, Evidence
+// ---------------------------------------------------------------------------
+
+model VoiceRecording {
+  id            String      @id @default(cuid())
+  assessmentId  String?     @unique
+  assessment    Assessment? @relation(fields: [assessmentId], references: [id])
+  storageKey    String // relative path under storage root (S3 key when migrated)
+  durationSec   Float?
+  languageCode  String?
+  transcript    String?
+  transcriptSrc String      @default("operator_entered") // "operator_entered" | "whisper_local" | "victim_typed"
+  createdAt     DateTime    @default(now())
+}
+
+model VideoRecording {
+  id          String   @id @default(cuid())
+  caseId      String?
+  storageKey  String
+  purpose     String // "counselling_session" | "legal_consultation" | "victim_statement"
+  durationSec Float?
+  createdAt   DateTime @default(now())
+}
+
+enum DocumentType {
+  COMPLAINT_COPY
+  FIR
+  MEDICAL_REPORT
+  IDENTITY_PROOF
+  EVIDENCE_PHOTO
+  COURT_ORDER
+  STATEMENT
+  OTHER
+}
+
+model Document {
+  id           String            @id @default(cuid())
+  victimId     String?
+  victim       Victim?           @relation(fields: [victimId], references: [id])
+  complaintId  String?
+  complaint    Complaint?        @relation(fields: [complaintId], references: [id])
+  type         DocumentType
+  title        String
+  storageKey   String
+  mimeType     String
+  sizeBytes    Int
+  status       String            @default("uploaded") // uploaded | verified | rejected
+  uploadedById String?
+  uploadedBy   User?             @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  versions     DocumentVersion[]
+  createdAt    DateTime          @default(now())
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id])
+  versionNo  Int
+  storageKey String
+  note       String?
+  createdAt  DateTime @default(now())
+}
+
+model Evidence {
+  id                 String   @id @default(cuid())
+  caseId             String
+  label              String
+  storageKey         String
+  collectedBy        String?
+  chainOfCustodyJson String? // serialized JSON array of custody events
+  createdAt          DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Assessments and AI scoring output
+// ---------------------------------------------------------------------------
+
+model Assessment {
+  id          String     @id @default(cuid())
+  victimId    String
+  victim      Victim     @relation(fields: [victimId], references: [id])
+  complaintId String?
+  complaint   Complaint? @relation(fields: [complaintId], references: [id])
+  caseId      String?
+  case        Case?      @relation(fields: [caseId], references: [id])
+  sourceText  String? // narrative / transcript analyzed
+  status      String     @default("completed") // pending | processing | completed | failed
+  createdAt   DateTime   @default(now())
+
+  voiceRecording  VoiceRecording?
+  emotionScore    EmotionScore?
+  traumaScore     TraumaScore?
+  fearScore       FearScore?
+  stressScore     StressScore?
+  isolationScore  IsolationScore?
+  threatIndicator ThreatIndicator?
+  riskScore       RiskScore?
+  sviScore        SVIScore?
+  recommendations Recommendation[]
+  aiOutputs       AIModelOutput[]
+  explanations    AIExplanation[]
+  reviews         AssessmentReview[]
+}
+
+// Real human-feedback / outcome-labeling mechanism: without this, nothing
+// in the system ever records whether a staff member agreed with the AI's
+// assessment. This is the actual, honest mechanism for accumulating real
+// labeled data over time from genuine field use - the only path to
+// validating (or correcting) the scoring formulas against real judgment,
+// as opposed to the illustrative self-written evaluation harness in the
+// AI service (see ai-service/app/mlops/evaluation.py's own disclaimer).
+model AssessmentReview {
+  id           String   @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  reviewerId   String
+  reviewer     User     @relation(fields: [reviewerId], references: [id])
+  action       String // "CONFIRMED" | "OVERRIDDEN"
+  overriddenBand String? // set when action is OVERRIDDEN - the reviewer's own risk-band judgment
+  note         String?
+  createdAt    DateTime @default(now())
+}
+
+model EmotionScore {
+  id              String     @id @default(cuid())
+  assessmentId    String     @unique
+  assessment      Assessment @relation(fields: [assessmentId], references: [id])
+  fear            Float
+  anxiety         Float
+  distress        Float
+  sadness         Float
+  anger           Float
+  hope            Float
+  neutral         Float
+  dominantEmotion String
+  severityIndex   Float
+  createdAt       DateTime   @default(now())
+}
+
+model TraumaScore {
+  id           String     @id @default(cuid())
+  assessmentId String     @unique
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  score        Float
+  confidence   Float
+  createdAt    DateTime   @default(now())
+}
+
+model FearScore {
+  id           String     @id @default(cuid())
+  assessmentId String     @unique
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  score        Float
+  confidence   Float
+  createdAt    DateTime   @default(now())
+}
+
+model StressScore {
+  id           String     @id @default(cuid())
+  assessmentId String     @unique
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  score        Float
+  confidence   Float
+  voiceStress  Float?
+  createdAt    DateTime   @default(now())
+}
+
+model IsolationScore {
+  id           String     @id @default(cuid())
+  assessmentId String     @unique
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  score        Float
+  confidence   Float
+  createdAt    DateTime   @default(now())
+}
+
+model ThreatIndicator {
+  id              String     @id @default(cuid())
+  assessmentId    String     @unique
+  assessment      Assessment @relation(fields: [assessmentId], references: [id])
+  score           Float
+  retaliationRisk Float
+  keywordsJson    String // serialized JSON string array of matched keywords
+  createdAt       DateTime   @default(now())
+}
+
+model RiskScore {
+  id                    String     @id @default(cuid())
+  assessmentId          String     @unique
+  assessment            Assessment @relation(fields: [assessmentId], references: [id])
+  level                 RiskLevel
+  score                 Float
+  escalationProbability Float
+  createdAt             DateTime   @default(now())
+}
+
+model SVIScore {
+  id           String     @id @default(cuid())
+  assessmentId String     @unique
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  value        Float // 0-100
+  band         RiskLevel
+  modelVersion String
+  createdAt    DateTime   @default(now())
+}
+
+enum InterventionType {
+  COUNSELLING
+  MEDICAL_AID
+  POLICE_PROTECTION
+  WITNESS_PROTECTION
+  LEGAL_AID
+  COMPENSATION_SUPPORT
+  SHELTER_SUPPORT
+  REHABILITATION_SUPPORT
+}
+
+model Recommendation {
+  id           String           @id @default(cuid())
+  assessmentId String
+  assessment   Assessment       @relation(fields: [assessmentId], references: [id])
+  type         InterventionType
+  priority     Int // 1 highest
+  rationale    String
+  confidence   Float
+  createdAt    DateTime         @default(now())
+
+  intervention Intervention?
+}
+
+model Intervention {
+  id               String           @id @default(cuid())
+  caseId           String
+  case             Case             @relation(fields: [caseId], references: [id])
+  recommendationId String?          @unique
+  recommendation   Recommendation?  @relation(fields: [recommendationId], references: [id])
+  type             InterventionType
+  status           String           @default("pending") // pending | active | completed | declined
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Legal aid
+// ---------------------------------------------------------------------------
+
+model LegalAidRecord {
+  id             String   @id @default(cuid())
+  victimId       String
+  victim         Victim   @relation(fields: [victimId], references: [id])
+  caseId         String
+  case           Case     @relation(fields: [caseId], references: [id])
+  lawyerName     String?
+  lawyerContact  String?
+  specialization String?
+  status         String   @default("assigned")
+  createdAt      DateTime @default(now())
+
+  courtCase    CourtCase?
+  compensation CompensationRecord?
+}
+
+model CourtCase {
+  id         String         @id @default(cuid())
+  legalAidId String         @unique
+  legalAid   LegalAidRecord @relation(fields: [legalAidId], references: [id])
+  caseNumber String         @unique
+  court      String
+  filedAt    DateTime?
+  status     String         @default("active")
+  hearings   Hearing[]
+}
+
+model Hearing {
+  id          String    @id @default(cuid())
+  courtCaseId String
+  courtCase   CourtCase @relation(fields: [courtCaseId], references: [id])
+  label       String // "FIR Filed" | "Charge Sheet Submitted" | "First Hearing" | ...
+  scheduledAt DateTime
+  status      String    @default("upcoming") // completed | in_progress | upcoming
+  notes       String?
+  createdAt   DateTime  @default(now())
+}
+
+model CompensationRecord {
+  id             String         @id @default(cuid())
+  legalAidId     String         @unique
+  legalAid       LegalAidRecord @relation(fields: [legalAidId], references: [id])
+  stage          String         @default("applied") // applied | under_review | approved | released
+  amountApplied  Float?
+  amountApproved Float?
+  updatedAt      DateTime       @updatedAt
+  createdAt      DateTime       @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Counselling / Recovery
+// ---------------------------------------------------------------------------
+
+model CounsellingSession {
+  id               String   @id @default(cuid())
+  victimId         String
+  victim           Victim   @relation(fields: [victimId], references: [id])
+  counsellorId     String
+  counsellor       User     @relation("CounsellorUser", fields: [counsellorId], references: [id])
+  scheduledAt      DateTime
+  status           String   @default("scheduled") // scheduled | completed | cancelled | no_show
+  mode             String   @default("video") // video | in_person | phone
+  notes            String?
+  wellbeingScore   Float?
+  videoRecordingId String?
+  createdAt        DateTime @default(now())
+}
+
+model RecoveryMilestone {
+  id         String    @id @default(cuid())
+  victimId   String
+  victim     Victim    @relation(fields: [victimId], references: [id])
+  label      String
+  achieved   Boolean   @default(false)
+  achievedAt DateTime?
+  orderIndex Int
+  createdAt  DateTime  @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Notifications / Messaging / SOS
+// ---------------------------------------------------------------------------
+
+enum NotificationChannel {
+  IN_APP
+  SMS
+  EMAIL
+  PUSH
+  WHATSAPP
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id])
+  channel     NotificationChannel @default(IN_APP)
+  eventType   String // "sos" | "case_update" | "legal_update" | "counselling_session" | "court_hearing" | "document_change"
+  title       String
+  body        String
+  read        Boolean             @default(false)
+  deliveredAt DateTime?
+  createdAt   DateTime            @default(now())
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  caseId    String?
+  senderId  String
+  sender    User     @relation("MessageSender", fields: [senderId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+}
+
+enum SOSStatus {
+  OPEN
+  ACKNOWLEDGED
+  DISPATCHED
+  RESOLVED
+}
+
+model SOSRequest {
+  id          String     @id @default(cuid())
+  victimId    String?
+  victim      Victim?    @relation(fields: [victimId], references: [id])
+  complaintId String?
+  complaint   Complaint? @relation(fields: [complaintId], references: [id])
+  lat         Float?
+  lng         Float?
+  state       String?
+  district    String?
+  status      SOSStatus  @default(OPEN)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  resolvedAt  DateTime?
+}
+
+model SupportCenter {
+  id        String   @id @default(cuid())
+  type      String // "police_station" | "counselling_center" | "legal_aid_office" | "shelter_home"
+  name      String
+  state     String
+  district  String
+  lat       Float?
+  lng       Float?
+  phone     String?
+  createdAt DateTime @default(now())
+}
+
+model GISData {
+  id          String    @id @default(cuid())
+  state       String
+  district    String
+  activeCases Int       @default(0)
+  riskLevel   RiskLevel @default(MODERATE)
+  updatedAt   DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Audit, consent, AI explainability, system settings
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String // "READ" | "CREATE" | "UPDATE" | "DELETE" | "LOGIN" | "EXPORT"
+  entityType String
+  entityId   String?
+  metaJson   String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
+
+model ConsentRecord {
+  id         String    @id @default(cuid())
+  victimId   String
+  victim     Victim    @relation(fields: [victimId], references: [id])
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  scope      String // "data_sharing" | "ai_assessment" | "video_recording" | "research"
+  granted    Boolean
+  recordedAt DateTime  @default(now())
+  expiresAt  DateTime?
+}
+
+model AIModelOutput {
+  id           String     @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  engine       String // "voice" | "nlp" | "emotion" | "svi" | "recommendation"
+  modelVersion String
+  rawJson      String // serialized JSON of the full engine response
+  latencyMs    Int?
+  createdAt    DateTime   @default(now())
+}
+
+model AIExplanation {
+  id               String     @id @default(cuid())
+  assessmentId     String
+  assessment       Assessment @relation(fields: [assessmentId], references: [id])
+  confidence       Float
+  reasonCodesJson  String // serialized JSON string array
+  featuresJson     String // serialized JSON array of {label, contributionPct, direction}
+  decisionPathJson String // serialized JSON string array
+  createdAt        DateTime   @default(now())
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,31 @@
+[project]
+name = "traumasense-ai-service"
+version = "1.0.0"
+description = "TraumaSense AI - stateless AI compute microservice (voice, NLP, emotion, SVI, recommendation, explainability engines)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.141.1",
+    "pydantic-settings>=2.15.0",
+    "pydantic>=2.13.5",
+    "python-multipart>=0.0.32",
+    "uvicorn[standard]>=0.53.0",
+    "numpy>=2.1.0",
+    "scipy>=1.14.0",
+    "soundfile>=0.12.1",
+    "librosa>=0.11.0",
+    "praat-parselmouth>=0.4.7",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.8",
+]
+
+[tool.ruff.lint]
+# B008 (function-call-in-default-argument) flags FastAPI's idiomatic
+# `Depends(...)` as a default argument, which is the framework's intended
+# pattern, not a bug - ignored rather than working around it everywhere.
+ignore = ["B008"]

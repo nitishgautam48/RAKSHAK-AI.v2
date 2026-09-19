@@ -19,7 +19,7 @@ from app.engines import (
     voice_engine,
 )
 from app.engines.explainability_engine import build as build_explanation
-from app.mlops import drift, evaluation, registry, voice_evaluation
+from app.mlops import degradation, drift, evaluation, registry, voice_evaluation
 from app.schemas import AssessRequest, NlpAnalyzeRequest
 
 settings = get_settings()
@@ -90,6 +90,7 @@ def assess(body: AssessRequest) -> dict:
             )
         except Exception:  # noqa: BLE001 - a real ASR failure must degrade, not 500 the whole assessment
             transcript = None
+            degradation.log_degradation("stt", f"{settings.stt_provider}_transcription_failed")
     if transcript is None:
         transcript = speech_engine.get_provider("operator_transcript").transcribe(
             audio_bytes=None, provided_transcript=body.narrative, language_hint=body.language_hint,
@@ -109,6 +110,7 @@ def assess(body: AssessRequest) -> dict:
             voice_result = voice_engine.analyze(audio_bytes, transcript_word_count=word_count)
         except Exception:  # noqa: BLE001 - degrade gracefully, voice analysis is optional
             voice_result = None
+            degradation.log_degradation("voice_dsp", "voice_analysis_failed")
 
     nlp_result = nlp_engine.analyze(analysis_text)
 
@@ -126,6 +128,16 @@ def assess(body: AssessRequest) -> dict:
             field_name = f"{category}_score"
             current = getattr(nlp_result, field_name)
             setattr(nlp_result, field_name, max(current, llm_result.scores[category]))
+    elif llm_result.error not in (None, "no_api_key_configured", "empty_text"):
+        # "no_api_key_configured" means the feature is simply off for this
+        # deployment - not a failure. "empty_text" means there was nothing
+        # to analyze. Anything else (api_error, malformed_response,
+        # no_tool_use_in_response) is a real degrade worth counting - only
+        # the category prefix is logged (not the full exception text some
+        # of these embed), so distinct error messages from the same failure
+        # mode don't fragment the count, and no exception detail leaks into
+        # a log a wider set of admins can read.
+        degradation.log_degradation("llm", llm_result.error.split(":", 1)[0])
 
     emotion_result = emotion_engine.analyze(nlp_result, voice_result)
 
@@ -251,3 +263,8 @@ def mlops_voice_eval() -> dict:
 @app.get("/v1/mlops/drift", dependencies=[Depends(require_service_key)])
 def mlops_drift() -> dict:
     return drift.check_drift()
+
+
+@app.get("/v1/mlops/degradation", dependencies=[Depends(require_service_key)])
+def mlops_degradation() -> dict:
+    return degradation.get_degradation_summary()

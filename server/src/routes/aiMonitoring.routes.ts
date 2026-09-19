@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/error.js';
-import { getMlopsRegistry, getMlopsEval, getMlopsVoiceEval, getMlopsDrift } from '../services/ai.service.js';
+import { getMlopsRegistry, getMlopsEval, getMlopsVoiceEval, getMlopsDrift, getMlopsDegradation } from '../services/ai.service.js';
 
 export const aiMonitoringRouter = Router();
 aiMonitoringRouter.use(requireAuth);
@@ -11,6 +11,7 @@ aiMonitoringRouter.get('/registry', asyncHandler(async (_req, res) => res.json(a
 aiMonitoringRouter.get('/eval', asyncHandler(async (_req, res) => res.json(await getMlopsEval())));
 aiMonitoringRouter.get('/voice-eval', asyncHandler(async (_req, res) => res.json(await getMlopsVoiceEval())));
 aiMonitoringRouter.get('/drift', asyncHandler(async (_req, res) => res.json(await getMlopsDrift())));
+aiMonitoringRouter.get('/degradation', asyncHandler(async (_req, res) => res.json(await getMlopsDegradation())));
 
 // The real validation metric: what fraction of AI assessments that staff
 // actually reviewed did they confirm vs. override? Unlike the illustrative

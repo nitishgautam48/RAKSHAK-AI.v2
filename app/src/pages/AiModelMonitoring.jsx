@@ -28,6 +28,7 @@ export default function AiModelMonitoring() {
   const [evalData, setEvalData] = useState(null);
   const [voiceEval, setVoiceEval] = useState(null);
   const [drift, setDrift] = useState(null);
+  const [degradation, setDegradation] = useState(null);
   const [agreement, setAgreement] = useState(null);
   const [auditSummary, setAuditSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,13 +39,16 @@ export default function AiModelMonitoring() {
       api.get('/api/ai-monitoring/eval'),
       api.get('/api/ai-monitoring/voice-eval'),
       api.get('/api/ai-monitoring/drift'),
+      api.get('/api/ai-monitoring/degradation'),
       api.get('/api/ai-monitoring/agreement-stats'),
       api.get('/api/meta/audit-summary'),
     ])
-      .then(([r, e, v, d, ag, a]) => { setRegistry(r); setEvalData(e); setVoiceEval(v); setDrift(d); setAgreement(ag); setAuditSummary(a); })
+      .then(([r, e, v, d, deg, ag, a]) => { setRegistry(r); setEvalData(e); setVoiceEval(v); setDrift(d); setDegradation(deg); setAgreement(ag); setAuditSummary(a); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const ENGINE_DISPLAY_NAME = { stt: 'Speech-to-text', voice_dsp: 'Voice-stress DSP', llm: 'LLM narrative understanding' };
 
   const activeModels = (registry?.models ?? []).filter((m) => m.status === 'active');
 
@@ -115,6 +119,38 @@ export default function AiModelMonitoring() {
             <pre style={{ fontSize: 11, color: '#c4c8d4', whiteSpace: 'pre-wrap' }}>{JSON.stringify(drift, null, 1)}</pre>
           )}
         </div>
+      </div>
+
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 4 }}>Silent Degrade Events</div>
+        <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>
+          Speech-to-text, voice-stress DSP, and LLM narrative understanding all fall back safely rather than failing the whole
+          assessment when they hit a real error - this tracks how often that actually happens, so a real failure rate is visible
+          instead of silently absorbed. Excludes features that are simply unconfigured for this deployment (not a failure).
+        </div>
+        {degradation && degradation.totalEvents === 0 && (
+          <div style={{ color: 'oklch(0.72 0.15 145)', fontSize: 12.5 }}>No degrade events logged - every configured engine has run cleanly so far.</div>
+        )}
+        {degradation && degradation.totalEvents > 0 && (
+          <>
+            <div style={{ display: 'flex', gap: 20, marginBottom: 14, flexWrap: 'wrap' }}>
+              <div><div style={{ font: '700 22px Sora,sans-serif', color: degradation.recentEvents > 0 ? 'oklch(0.7 0.17 55)' : 'oklch(0.72 0.15 145)' }}>{degradation.recentEvents}</div><div style={{ fontSize: 11, color: '#8b91a3' }}>Last {degradation.recentWindowHours}h</div></div>
+              <div><div style={{ font: '700 22px Sora,sans-serif' }}>{degradation.totalEvents}</div><div style={{ fontSize: 11, color: '#8b91a3' }}>All-time total</div></div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {Object.entries(degradation.byEngineReason).map(([key, count]) => {
+                const [engine, reason] = key.split(':');
+                return (
+                  <div key={key} style={{ display: 'flex', gap: 14, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.05)', fontSize: 12 }}>
+                    <div style={{ width: 180, color: '#eef0f6' }}>{ENGINE_DISPLAY_NAME[engine] ?? engine}</div>
+                    <div style={{ flex: 1, color: '#8b91a3' }}>{reason}</div>
+                    <div style={{ fontWeight: 600, color: 'oklch(0.7 0.17 55)' }}>{count}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       <div style={{ ...card, marginBottom: 16 }}>

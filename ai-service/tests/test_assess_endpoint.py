@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.engines.speech_engine import SpeechToTextProvider, TranscriptionResult
+from app.mlops import degradation
 
 SERVICE_KEY_HEADERS = {"X-Service-Key": main.settings.service_key}
 FAKE_AUDIO = base64.b64encode(b"not-real-audio-bytes-just-a-fixture").decode()
@@ -44,6 +45,18 @@ class _FailingProvider(SpeechToTextProvider):
 @pytest.fixture
 def client():
     return TestClient(main.app)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_degradation_log(monkeypatch, tmp_path):
+    # Several tests in this file deliberately trigger STT/voice-DSP
+    # failures to test fallback behavior - without this, those real
+    # degrade() calls would write into this machine's actual
+    # data/degradation_events.jsonl, polluting real observability data with
+    # test noise. Autouse so no test can forget it (a real bug found after
+    # adding task #123's logging: the pre-existing failure-path tests below
+    # had exactly this leak until this fixture was added).
+    monkeypatch.setattr(degradation, "_log_path", lambda: tmp_path / "degradation_events.jsonl")
 
 
 def test_default_provider_ignores_audio_and_uses_typed_narrative(client, monkeypatch):
@@ -107,6 +120,49 @@ def test_whisper_failure_falls_back_to_typed_narrative_instead_of_erroring(clien
     body = resp.json()
     assert body["transcript"]["source"] == "operator_transcript"
     assert body["nlp"]["threatScore"] > 0
+
+
+def test_whisper_failure_is_logged_as_a_degradation_event(client, monkeypatch):
+    # Task #123: a real STT failure used to be entirely silent (fall back
+    # and move on) - it must now leave a real, countable trace so an admin
+    # can tell "Whisper is failing on real traffic" from "STT isn't
+    # configured."
+    monkeypatch.setattr(main.settings, "stt_provider", "whisper_local")
+    monkeypatch.setattr(
+        main.speech_engine, "get_provider",
+        lambda name: _FailingProvider() if name == "whisper_local" else main.speech_engine.OperatorTranscriptProvider(),
+    )
+    client.post(
+        "/v1/assess",
+        json={"narrative": "They threatened to kill us.", "audio_base64": FAKE_AUDIO},
+        headers=SERVICE_KEY_HEADERS,
+    )
+    summary = degradation.get_degradation_summary()
+    assert summary["byEngine"].get("stt") == 1
+
+
+def test_voice_dsp_failure_is_logged_as_a_degradation_event(client):
+    # FAKE_AUDIO isn't real audio, so voice_engine.analyze will fail on it -
+    # the default operator_transcript provider means STT isn't touched.
+    client.post(
+        "/v1/assess",
+        json={"narrative": "They threatened to kill us.", "audio_base64": FAKE_AUDIO},
+        headers=SERVICE_KEY_HEADERS,
+    )
+    summary = degradation.get_degradation_summary()
+    assert summary["byEngine"].get("voice_dsp") == 1
+
+
+def test_no_failures_means_no_degradation_events_logged(client):
+    # Regression guard the other direction: a totally clean run (no audio at
+    # all, so nothing can fail) must not spuriously log anything.
+    client.post(
+        "/v1/assess",
+        json={"narrative": "They threatened to kill us."},
+        headers=SERVICE_KEY_HEADERS,
+    )
+    summary = degradation.get_degradation_summary()
+    assert summary["totalEvents"] == 0
 
 
 def test_no_audio_never_calls_the_stt_provider_with_audio(client, monkeypatch):

@@ -98,3 +98,4 @@ export const getMlopsRegistry = () => getMlops('/v1/mlops/registry');
 export const getMlopsEval = () => getMlops('/v1/mlops/eval');
 export const getMlopsVoiceEval = () => getMlops('/v1/mlops/voice-eval');
 export const getMlopsDrift = () => getMlops('/v1/mlops/drift');
+export const getMlopsDegradation = () => getMlops('/v1/mlops/degradation');

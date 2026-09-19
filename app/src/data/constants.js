@@ -129,13 +129,6 @@ export const VICTIM_TABS = [
   { key: 'counselling', label: 'Counselling' }, { key: 'legal', label: 'Legal Aid' }, { key: 'documents', label: 'Documents' },
   { key: 'emergency', label: 'Emergency' }, { key: 'companion', label: 'Companion' },
 ];
-export const NOTIFICATIONS = [
-  { text: 'Counsellor appointment scheduled for Sep 19', time: '2h ago' },
-  { text: 'Protection request approved', time: '1d ago' },
-  { text: 'Legal hearing reminder: Oct 2', time: '2d ago' },
-  { text: 'Document verification completed', time: '3d ago' },
-];
-
 export const LEGAL_RESOURCES = [
   { title: 'Your Rights Under the SC/ST (Prevention of Atrocities) Act', type: 'Guide' },
   { title: 'State Legal Aid Scheme Eligibility', type: 'Scheme' },

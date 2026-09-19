@@ -1,6 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import BrandMark from '../components/BrandMark';
-import { VICTIM_TABS, NOTIFICATIONS } from '../data/constants';
+import { api } from '../lib/api';
+import { VICTIM_TABS } from '../data/constants';
+
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 import VictimDashboard from './VictimDashboard';
 import FileComplaint from './FileComplaint';
 import CaseTimeline from './CaseTimeline';
@@ -24,6 +35,22 @@ const TAB_COMPONENTS = {
 export default function VictimPortal({ onBack, initialTab = 'dashboard' }) {
   const [tab, setTab] = useState(initialTab);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    api.get('/api/notifications?pageSize=20')
+      .then((r) => { setNotifications(r.items ?? []); setUnread(r.unread ?? 0); })
+      .catch(() => {});
+  }, []);
+
+  const openNotifications = () => {
+    const next = !notifOpen;
+    setNotifOpen(next);
+    if (next && unread > 0) {
+      api.patch('/api/notifications/read-all').then(() => setUnread(0)).catch(() => {});
+    }
+  };
 
   const TabComponent = TAB_COMPONENTS[tab];
 
@@ -34,9 +61,9 @@ export default function VictimPortal({ onBack, initialTab = 'dashboard' }) {
           <div onClick={onBack} style={{ cursor: 'pointer', color: '#8b91a3', fontSize: 18 }}>←</div>
           <BrandMark size={28} radius={8} />
           <div style={{ font: '700 15px Sora,sans-serif', flex: 1 }}>Support Portal</div>
-          <div onClick={() => setNotifOpen((v) => !v)} style={{ position: 'relative', cursor: 'pointer', color: '#8b91a3', fontSize: 16 }}>
+          <div onClick={openNotifications} style={{ position: 'relative', cursor: 'pointer', color: '#8b91a3', fontSize: 16 }}>
             &#128276;
-            <div style={{ position: 'absolute', top: -3, right: -4, width: 8, height: 8, borderRadius: '50%', background: 'oklch(0.62 0.21 25)' }} />
+            {unread > 0 && <div style={{ position: 'absolute', top: -3, right: -4, width: 8, height: 8, borderRadius: '50%', background: 'oklch(0.62 0.21 25)' }} />}
           </div>
         </div>
 
@@ -46,10 +73,11 @@ export default function VictimPortal({ onBack, initialTab = 'dashboard' }) {
               <div style={{ font: '600 12.5px Sora,sans-serif', color: '#8b91a3' }}>Notifications</div>
               <div onClick={() => setNotifOpen(false)} style={{ cursor: 'pointer', color: '#7d8399', fontSize: 14 }}>&times;</div>
             </div>
-            {NOTIFICATIONS.map((nf) => (
-              <div key={nf.text} style={{ padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,.06)', fontSize: 12.5 }}>
-                <div style={{ color: '#eef0f6' }}>{nf.text}</div>
-                <div style={{ color: '#5c6178', fontSize: 11 }}>{nf.time}</div>
+            {notifications.length === 0 && <div style={{ padding: '10px 0', fontSize: 12, color: '#5c6178' }}>No notifications yet.</div>}
+            {notifications.map((nf) => (
+              <div key={nf.id} style={{ padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,.06)', fontSize: 12.5 }}>
+                <div style={{ color: '#eef0f6' }}>{nf.title}</div>
+                <div style={{ color: '#5c6178', fontSize: 11 }}>{timeAgo(nf.createdAt)}</div>
               </div>
             ))}
           </div>

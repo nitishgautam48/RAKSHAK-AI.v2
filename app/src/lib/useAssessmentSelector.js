@@ -25,17 +25,25 @@ export function useAssessmentSelector() {
 
   useEffect(() => {
     if (!selectedId) return;
+    // Guards against a stale, slower request for a previously-selected
+    // complaint resolving AFTER a newer selection's request and silently
+    // overwriting it - e.g. switching complaints quickly in the dropdown
+    // could show one complaint's narrative next to a different, unrelated
+    // complaint's (older) assessment. Every setter below is skipped once
+    // `selectedId` has moved on from the id this effect run was fetching for.
+    let cancelled = false;
     setLoading(true);
     setError('');
     setAssessment(null);
     setComplaint(null);
     Promise.all([
-      api.get(`/api/complaints/${selectedId}`).then(setComplaint),
+      api.get(`/api/complaints/${selectedId}`).then((c) => { if (!cancelled) setComplaint(c); }),
       api.get(`/api/assessments?complaintId=${selectedId}`)
-        .then((list) => (list.length ? api.get(`/api/assessments/${list[0].id}`).then(setAssessment) : null)),
+        .then((list) => (list.length ? api.get(`/api/assessments/${list[0].id}`).then((a) => { if (!cancelled) setAssessment(a); }) : null)),
     ])
-      .catch(() => setError('Could not load assessment.'))
-      .finally(() => setLoading(false));
+      .catch(() => { if (!cancelled) setError('Could not load assessment.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [selectedId]);
 
   // Convenience: parsed raw per-engine payloads (voice/nlp/emotion/svi),

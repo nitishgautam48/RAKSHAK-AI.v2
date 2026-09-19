@@ -37,15 +37,19 @@ export default function FileComplaint() {
         channel: 'portal',
       });
 
-      if (audioFile) {
-        const audioBase64 = await fileToBase64(audioFile);
-        await api.post('/api/assessments', {
-          victimId: complaint.victimId,
-          complaintId: complaint.id,
-          narrative: narrative.trim(),
-          audioBase64,
-        }).catch(() => {}); // complaint is already filed either way; assessment can also be run later by staff
-      }
+      // Always run a real AI assessment on the narrative, not just when
+      // audio is attached - a text-only complaint (the common case) was
+      // previously filed but never analyzed at all, silently leaving staff
+      // with no risk signal on the majority of intakes. Best-effort: the
+      // complaint is already filed either way, and staff can re-run this
+      // later from Real-Time Assessment if it fails.
+      const audioBase64 = audioFile ? await fileToBase64(audioFile) : undefined;
+      await api.post('/api/assessments', {
+        victimId: complaint.victimId,
+        complaintId: complaint.id,
+        narrative: narrative.trim(),
+        audioBase64,
+      }).catch(() => {});
 
       if (docFile) {
         const form = new FormData();

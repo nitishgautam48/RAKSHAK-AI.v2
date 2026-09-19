@@ -58,6 +58,48 @@ def test_nlp_retaliation_language_raises_threat_score():
     assert warned.threat_score > baseline.threat_score
 
 
+def test_nlp_detects_threat_and_caste_targeting_in_bengali():
+    result = nlp_engine.analyze("তারা আমাদের মেরে ফেলব বলে হুমকি দিয়েছে। আমরা দলিত জাতি।")
+    assert result.threat_score > 0
+    assert result.caste_targeting_score > 0
+
+
+def test_nlp_detects_fear_and_isolation_in_tamil():
+    result = nlp_engine.analyze("நான் மிகவும் பயந்தேன், நான் தனியாக இருக்கிறேன்.")
+    assert result.fear_score > 0
+    assert result.isolation_score > 0
+
+
+def test_nlp_detects_threat_in_telugu():
+    result = nlp_engine.analyze("వాళ్ళు నన్ను చంపేస్తాను అని బెదిరింపు చేశారు.")
+    assert result.threat_score > 0
+
+
+def test_nlp_detects_hopelessness_in_kannada():
+    result = nlp_engine.analyze("ನನಗೆ ಭರವಸೆ ಇಲ್ಲ, ನಾನು ಒಂಟಿ.")
+    assert result.hopelessness_score > 0
+
+
+def test_nlp_detects_physical_harm_in_odia():
+    result = nlp_engine.analyze("ସେମାନେ ମୋତେ ମାଡ଼ ମାରିଲେ ଏବଂ ମୁଁ ଆଘାତ ପାଇଲି।")
+    assert result.trauma_score > 0
+    assert "ମାଡ଼" in result.matched_keywords
+
+
+def test_nlp_detects_caste_targeting_in_marathi():
+    result = nlp_engine.analyze("आम्ही दलित जात आहोत आणि त्यांनी आम्हाला जीवे मारण्याची धमकी दिली.")
+    assert result.caste_targeting_score > 0
+    assert result.threat_score > 0
+
+
+def test_nlp_word_count_covers_non_devanagari_indian_scripts():
+    # WORD_RE previously only recognized Latin + Devanagari codepoints as
+    # "words" - Tamil/Telugu/Kannada/Bengali/Odia text would have scored a
+    # word_count of 0, which also silently caps confidence at 55.
+    result = nlp_engine.analyze("நான் மிகவும் பயந்தேன்")
+    assert result.word_count > 0
+
+
 def test_nlp_negation_does_not_discount_the_phrase_it_is_part_of():
     # "do not belong" is itself the caste-targeting trigger phrase - the
     # negation scan must not treat its own embedded "not" as negating it.

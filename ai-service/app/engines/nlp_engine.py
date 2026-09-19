@@ -5,11 +5,25 @@ narratives with ground-truth trauma scores to train RoBERTa/ClinicalBERT/
 Llama against (and no reachable host to fetch those weights from even if
 one existed - see README.md). Rather than fabricate a "trained model", this
 engine does real computation over the real input text: weighted keyword-
-category matching across English and Hindi (Devanagari + common Latin
-transliteration), plus linguistic features (negation, intensifiers,
-first-person distress framing). Every category score traces back to the
-exact keywords that fired, which is what the explainability engine surfaces
-as reason codes and feature contributions.
+category matching across English, Hindi, and six other major Indian
+languages (Bengali, Marathi, Telugu, Tamil, Kannada, Odia - chosen as the
+languages with the largest speaker populations among SC/ST-majority states
+after Hindi), plus linguistic features (negation, intensifiers, first-person
+distress framing). Every category score traces back to the exact keywords
+that fired, which is what the explainability engine surfaces as reason
+codes and feature contributions.
+
+CAVEAT: the Bengali, Marathi, Telugu, Tamil, Kannada, and Odia entries below
+were compiled by the AI system building this platform, not by a native or
+fluent speaker of those languages. They cover common, high-confidence
+vocabulary for each category but have NOT been reviewed by a native speaker
+for correctness, register (e.g. accidentally using a form of a word that
+sounds odd or overly formal in real distressed speech), dialectal variation,
+or missed common phrasings. The same caveat already applied to the Hindi
+entries below; treat all non-English lexicon entries as a starting point
+that needs native-speaker review before the platform relies on them
+operationally, and expand coverage (script + terms) for any other language
+actually seen in submitted narratives.
 """
 
 from __future__ import annotations
@@ -17,51 +31,111 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-# Keyword lexicons per trauma dimension. English + Hindi (Devanagari script,
+# Keyword lexicons per trauma dimension. English, Hindi (Devanagari script,
 # the language survivors most commonly narrate in per the platform's stated
-# audience) are both included; more Indian languages are a direct extension
-# of this same table, not an architecture change.
+# audience), and six more major Indian languages are included; any further
+# language is a direct extension of this same table, not an architecture
+# change. See the module-level CAVEAT above re: non-English/Hindi entries
+# needing native-speaker review.
 LEXICON: dict[str, list[str]] = {
     "threat": [
         "threat", "threaten", "kill", "murder", "beat", "burn", "attack", "weapon", "gun", "knife", "armed",
-        "dhamki", "jaan se maar", "maar denge", "धमकी", "जान से मार",
+        "dhamki", "jaan se maar", "maar denge", "धमकी", "जान से मार",  # Hindi
+        "जीवे मारण्याची धमकी", "मारून टाकू",  # Marathi
+        "হুমকি", "মেরে ফেলব",  # Bengali
+        "బెదిరింపు", "చంపేస్తాను", "కొడతాను",  # Telugu
+        "மிரட்டல்", "கொல்வோம்",  # Tamil
+        "ಬೆದರಿಕೆ", "ಕೊಲ್ಲುತ್ತೇವೆ",  # Kannada
+        "ଧମକ", "ମାରି ଦେବୁ",  # Odia
     ],
     "retaliation": [
         "retaliat", "revenge", "payback", "again if", "will suffer", "consequences", "warn",
         "worse will happen", "something worse",
-        "badla", "बदला", "अंजाम देंगे",
+        "badla", "बदला", "अंजाम देंगे",  # Hindi
     ],
     "fear": [
         "afraid", "scared", "terrified", "fear", "frightened", "panic", "unsafe", "dare not", "cannot sleep",
-        "darr", "dari", "darta", "darte", "ghabra", "डर", "डरा", "भय",
+        "darr", "dari", "darta", "darte", "ghabra", "डर", "डरा", "भय",  # Hindi
+        "भीती", "घाबरलो",  # Marathi
+        "ভয়", "ভয় পেয়েছি",  # Bengali
+        "భయం", "భయపడ్డాను",  # Telugu
+        "பயம்", "பயந்தேன்",  # Tamil
+        "ಭಯ", "ಹೆದರಿದೆ",  # Kannada
+        "ଭୟ", "ଡରିଗଲି",  # Odia
     ],
     "hopelessness": [
         "no hope", "give up", "hopeless", "no point", "nothing left", "cannot go on", "helpless",
         "no way out", "any way out", "don't know what to do", "no solution", "kuch nahi bacha",
-        "umeed nahi", "उम्मीद नहीं", "बेबस",
+        "umeed nahi", "उम्मीद नहीं", "बेबस",  # Hindi
+        "आशा नाही",  # Marathi
+        "আশা নেই",  # Bengali
+        "ఆశ లేదు",  # Telugu
+        "நம்பிக்கை இல்லை",  # Tamil
+        "ಭರವಸೆ ಇಲ್ಲ",  # Kannada
+        "ଆଶା ନାହିଁ",  # Odia
     ],
     "isolation": [
         "alone", "no one helps", "no one will", "no one to", "will speak to us", "excluded", "boycott",
         "abandoned", "isolated", "shunned", "no way out", "no support", "on our own",
         "denied entry", "not allowed to enter", "humiliat", "koi baat nahi",
-        "akela", "अकेला", "बहिष्कार",
+        "akela", "अकेला", "बहिष्कार",  # Hindi
+        "एकटा", "एकटी", "बहिष्कार",  # Marathi
+        "একা", "বয়কট",  # Bengali
+        "ఒంటరిగా", "వెలివేత",  # Telugu
+        "தனியாக", "புறக்கணிப்பு",  # Tamil
+        "ಒಂಟಿ", "ಬಹಿಷ್ಕಾರ",  # Kannada
+        "ଏକୁଟିଆ", "ବହିଷ୍କାର",  # Odia
     ],
     "vulnerability": [
         "children", "alone at home", "elderly", "disabled", "pregnant", "widow", "single mother",
-        "bachche", "बच्चे",
+        "bachche", "बच्चे",  # Hindi
+        "मुले", "वृद्ध",  # Marathi
+        "শিশু", "বৃদ্ধ",  # Bengali
+        "పిల్లలు", "వృద్ధులు",  # Telugu
+        "குழந்தைகள்", "முதியவர்",  # Tamil
+        "ಮಕ್ಕಳು", "ವೃದ್ಧ",  # Kannada
+        "ପିଲାମାନେ", "ବୃଦ୍ଧ",  # Odia
     ],
     "physical_harm": [
         "hit", "struck", "beaten", "injured", "wound", "bleeding", "hospital", "unconscious", "assault",
-        "maara", "मारा", "चोट",
+        "maara", "मारा", "चोट",  # Hindi
+        "मारहाण", "जखम",  # Marathi
+        "মারধর", "আঘাত",  # Bengali
+        "కొట్టారు", "గాయం",  # Telugu
+        "அடித்தார்கள்", "காயம்",  # Tamil
+        "ಹೊಡೆದರು", "ಗಾಯ",  # Kannada
+        "ମାଡ଼", "ଆଘାତ",  # Odia
     ],
     "caste_targeting": [
         "caste", "sc/st", "dalit", "untouchab", "land dispute", "do not belong", "temple",
-        "jaati", "जाति",
+        "jaati", "जाति",  # Hindi
+        "जात", "दलित",  # Marathi
+        "জাতি", "দলিত",  # Bengali
+        "కులం", "దళిత్",  # Telugu
+        "சாதி", "தலித்",  # Tamil
+        "ಜಾತಿ", "ದಲಿತ",  # Kannada
+        "ଜାତି", "ଦଳିତ",  # Odia
     ],
 }
 
-INTENSIFIERS = {"very", "extremely", "repeatedly", "every night", "every day", "again and again", "baar baar"}
-NEGATIONS = {"not", "never", "no longer", "nahi", "nahin"}
+INTENSIFIERS = {
+    "very", "extremely", "repeatedly", "every night", "every day", "again and again", "baar baar",
+    "खूप",  # Marathi (very)
+    "খুব",  # Bengali (very)
+    "చాలా",  # Telugu (very)
+    "மிகவும்",  # Tamil (very)
+    "ತುಂಬಾ",  # Kannada (very)
+    "ବହୁତ",  # Odia (very)
+}
+NEGATIONS = {
+    "not", "never", "no longer", "nahi", "nahin",
+    "नाही",  # Marathi
+    "না", "নেই",  # Bengali
+    "లేదు", "కాదు",  # Telugu
+    "இல்லை",  # Tamil
+    "ಇಲ್ಲ",  # Kannada
+    "ନାହିଁ",  # Odia
+}
 
 # Abuse by someone in a position of power/trust over the narrator (a teacher,
 # employer, landlord, custodial officer, doctor, etc.) is a recognized
@@ -76,7 +150,13 @@ AUTHORITY_CONTEXT = [
     "teacher", "employer", "landlord", "warden", "priest", "guardian", "doctor",
     "supervisor", "boss", "principal", "government official", "police officer",
     "in-law", "custodial officer", "forest officer",
-    "शिक्षक", "मालिक", "पुलिस अधिकारी",
+    "शिक्षक", "मालिक", "पुलिस अधिकारी",  # Hindi
+    "पोलीस अधिकारी",  # Marathi (शिक्षक is shared with Hindi)
+    "পুলিশ অফিসার", "শিক্ষক",  # Bengali
+    "పోలీసు అధికారి", "ఉపాధ్యాయుడు",  # Telugu
+    "போலீஸ் அதிகாரி", "ஆசிரியர்",  # Tamil
+    "ಪೊಲೀಸ್ ಅಧಿಕಾರಿ", "ಶಿಕ್ಷಕ",  # Kannada
+    "ପୋଲିସ ଅଧିକାରୀ", "ଶିକ୍ଷକ",  # Odia
 ]
 
 # First-person pronouns distinguish "I was beaten by the police" (a direct
@@ -89,10 +169,19 @@ AUTHORITY_CONTEXT = [
 # be safe here.
 FIRST_PERSON_MARKERS = [
     "i", "me", "my", "myself", "we", "us", "our",
-    "मुझे", "मेरा", "मेरी", "मेरे", "मैं", "हम", "हमें", "हमारा",
+    "मुझे", "मेरा", "मेरी", "मेरे", "मैं", "हम", "हमें", "हमारा",  # Hindi
+    "मी", "मला", "आम्ही", "आमचे",  # Marathi
+    "আমি", "আমাকে", "আমরা", "আমাদের",  # Bengali
+    "నేను", "నాకు", "మాకు", "మా",  # Telugu
+    "நான்", "எனக்கு", "எங்களுக்கு", "எங்கள்",  # Tamil
+    "ನಾನು", "ನನಗೆ", "ನಾವು", "ನಮ್ಮ",  # Kannada
+    "ମୁଁ", "ମୋତେ", "ଆମେ", "ଆମର",  # Odia
 ]
 
-WORD_RE = re.compile(r"[\wऀ-ॿ]+", re.UNICODE)
+# Devanagari (Hindi, Marathi), Bengali, Odia, Tamil, Telugu, and Kannada
+# Unicode script blocks, so word/word-count detection isn't limited to
+# Latin + Devanagari text.
+WORD_RE = re.compile(r"[\wऀ-ॿঀ-৿଀-୿஀-௿ఀ-౿ಀ-೿]+", re.UNICODE)
 
 
 @dataclass
@@ -123,7 +212,13 @@ class NlpIndicators:
 
 SUICIDAL_PATTERNS = [
     "end my life", "want to die", "kill myself", "no reason to live",
-    "khudkushi", "आत्महत्या",
+    "khudkushi", "आत्महत्या",  # Hindi
+    "आत्महत्या", "मरावेसे वाटते",  # Marathi (आत्महत्या shared with Hindi)
+    "আত্মহত্যা",  # Bengali
+    "చావాలని అనిపిస్తోంది",  # Telugu
+    "செத்துவிட வேண்டும்",  # Tamil
+    "ಆತ್ಮಹತ್ಯೆ",  # Kannada
+    "ଆତ୍ମହତ୍ୟା",  # Odia
 ]
 
 

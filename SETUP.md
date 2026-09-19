@@ -1,43 +1,47 @@
 # TraumaSense AI — local setup
 
-Three services, run in three terminals, in this order.
+Three services, run in three terminals, in this order. This zip ships with a fully migrated + seeded
+SQLite database (`server/prisma/data/traumasense.db`) and working `.env` files (dev-only placeholder
+secrets, safe to use as-is for local testing) — you can be logged in and clicking around within a few
+minutes.
 
 ## 1. AI microservice (Python, FastAPI) — port 8000
 
 ```bash
 cd ai-service
-uv sync              # installs deps incl. librosa + praat-parselmouth (pulls numba/llvmlite, ~1-2 min)
+uv sync              # installs deps incl. librosa + praat-parselmouth + faster-whisper (~1-2 min)
 uv run uvicorn app.main:app --reload --port 8000
 ```
 
-No `uv`? `pip install -e .` inside a Python 3.11+ venv works too (see `pyproject.toml` for the dependency list).
+No `uv`? `pip install -e .` inside a Python 3.11+ venv works too (see `pyproject.toml`).
 
 Health check: `curl http://localhost:8000/health`
+
+Real speech-to-text (Whisper) is off by default (`STT_PROVIDER=operator_transcript` in `.env`) — flip it
+to `STT_PROVIDER=whisper_local` with `WHISPER_MODEL_PATH=small` to turn it on; `faster-whisper` will
+download and cache the model automatically the first time it runs (needs real internet access — see the
+comment in `.env` for why this can't be exercised in every environment).
 
 ## 2. Node backend (Express + Prisma + SQLite) — port 4000
 
 ```bash
 cd server
 npm install
-npx prisma generate
-npx prisma migrate deploy   # applies migrations to the included seeded DB at prisma/data/traumasense.db
-npm run dev                 # tsx src/index.ts
+npm run prisma:generate
+npm run dev                 # tsx watch src/index.ts
 ```
 
-The zip ships with `prisma/data/traumasense.db` already migrated + seeded (realistic demo data across
-states/districts, victims, complaints, cases, users). If you'd rather start fresh:
+The included database already has realistic seeded demo data (states/districts, victims, complaints,
+cases, government staff accounts). If you want a completely fresh database instead:
 
 ```bash
-npx prisma migrate reset --force   # drops + recreates + reseeds
+npm run prisma:migrate      # prisma migrate dev - recreates the schema
+npm run db:seed             # repopulates it with the same seed data
 ```
 
-`.env` is included with dev-only placeholder secrets (`dev-insecure-service-key-change-me`, etc.) — fine
-for local testing, not for anything real.
-
-Demo logins — see `server/prisma/seed.ts` for the full list, e.g.:
-```
-admin@traumasense.test / ChangeMe123!
-```
+**Demo login (government side):** `admin@dsje.gov.in` / `Password123!` — see `server/prisma/seed.ts`
+for every other seeded account (counsellors, police officers, district officers, etc.), all using the
+same password.
 
 ## 3. Frontend (React + Vite) — port 5173/5183
 
@@ -47,18 +51,18 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (defaults to http://localhost:5173). It talks to the Node backend on :4000
-(see `app/.env.example` → copy to `.env` if you need to point it elsewhere).
+Open the URL Vite prints (defaults to http://localhost:5173). It talks to the Node backend on :4000;
+Node proxies AI calls to the AI microservice server-side, so the frontend never talks to it directly.
 
 ## Notes
 
-- The AI microservice is stateless — no DB of its own. The Node server is the only service with a
-  database, and it's the only one the frontend talks to directly; Node proxies AI calls to the
-  AI microservice server-side.
-- `ai-service/tests/` has real unit tests (`uv run pytest`) validating the voice DSP and NLP/SVI engines
-  against synthetic-but-known ground truth — worth running after `uv sync` to confirm the environment
-  is wired correctly.
-- Recently changed here (session-local additions, not yet in any published TraumaSense docs): voice
-  engine now uses librosa (pYIN pitch) + parselmouth/Praat (jitter/shimmer/HNR) instead of hand-rolled
-  DSP; NLP engine gained an authority-power-imbalance SVI escalation and a firsthand-testimony
-  priority-review flag. See `ai-service/app/engines/voice_engine.py` and `nlp_engine.py` docstrings.
+- The AI microservice is stateless - no DB of its own. The Node server is the only service with a
+  database.
+- `ai-service/tests/` (`uv run pytest`, 55 tests) and `server/src/__tests__/` (`npm test`, 32 tests)
+  are both real, meaningful test suites - worth running after setup to confirm everything's wired
+  correctly.
+- `LOAD_TEST_FINDINGS.md` at the repo root documents real concurrency limits found by load-testing this
+  exact codebase (SQLite write contention, voice-DSP throughput, API rate limiting) - useful reading
+  before pushing this anywhere beyond local testing.
+- Deferred/not yet implemented: Postgres migration, WhatsApp Business Platform integration, SMS gateway,
+  and Bhashini (multilingual ASR) integration - all deliberately parked, not partially-built.

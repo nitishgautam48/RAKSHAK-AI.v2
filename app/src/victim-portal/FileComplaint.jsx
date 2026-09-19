@@ -85,14 +85,26 @@ export default function FileComplaint() {
     setAudioUrl(URL.createObjectURL(file));
   };
 
+  // A survivor who only records/uploads audio and never types anything must
+  // still be able to submit - the narrative field itself stays required
+  // server-side (schema.prisma; not changing that here), so a voice-only
+  // submission sends this fixed placeholder instead of forcing typing.
+  // Real content still reaches staff: the audio itself is preserved and
+  // voice-DSP-analyzed either way - this placeholder only stands in for the
+  // required text field, it is not a substitute for a real transcript (see
+  // speech_engine.py's honesty notes on why that's a separate, harder gap).
+  const VOICE_ONLY_PLACEHOLDER = '[Voice message submitted - no typed narrative. See attached audio recording.]';
+
   const submit = async () => {
-    if (!narrative.trim() || submitting) return;
+    const hasNarrative = narrative.trim().length > 0;
+    if ((!hasNarrative && !audioBlob) || submitting) return;
+    const narrativeToSend = hasNarrative ? narrative.trim() : VOICE_ONLY_PLACEHOLDER;
     setSubmitting(true);
     setError('');
     try {
       const { complaint } = await api.post('/api/complaints', {
         incidentType,
-        narrative: narrative.trim(),
+        narrative: narrativeToSend,
         channel: 'portal',
       });
 
@@ -109,7 +121,7 @@ export default function FileComplaint() {
       await api.post('/api/assessments', {
         victimId: complaint.victimId,
         complaintId: complaint.id,
-        narrative: narrative.trim(),
+        narrative: narrativeToSend,
         audioBase64,
       }).catch(() => {});
 
@@ -153,7 +165,7 @@ export default function FileComplaint() {
       </div>
 
       <div>
-        <div style={{ fontSize: 13, color: '#8b91a3', marginBottom: 8 }}>Tell us what happened, in your own words</div>
+        <div style={{ fontSize: 13, color: '#8b91a3', marginBottom: 8 }}>Tell us what happened, in your own words (optional if you record a voice message below)</div>
         <textarea
           value={narrative}
           onChange={(e) => setNarrative(e.target.value)}
@@ -224,8 +236,8 @@ export default function FileComplaint() {
 
       <button
         onClick={submit}
-        disabled={!narrative.trim() || submitting}
-        style={{ padding: 16, borderRadius: 12, border: 'none', background: 'oklch(0.58 0.19 275)', color: '#fff', font: '700 15px Sora,sans-serif', cursor: 'pointer', opacity: !narrative.trim() || submitting ? 0.6 : 1 }}
+        disabled={(!narrative.trim() && !audioBlob) || submitting}
+        style={{ padding: 16, borderRadius: 12, border: 'none', background: 'oklch(0.58 0.19 275)', color: '#fff', font: '700 15px Sora,sans-serif', cursor: 'pointer', opacity: (!narrative.trim() && !audioBlob) || submitting ? 0.6 : 1 }}
       >
         {submitting ? 'Submitting…' : 'Submit Complaint'}
       </button>

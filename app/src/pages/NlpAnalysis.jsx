@@ -81,6 +81,18 @@ export default function NlpAnalysis() {
               </div>
             )}
 
+            {nlp?.semanticUnderstanding && (
+              <div style={{ background: 'oklch(0.65 0.14 200 / 0.08)', border: '1px solid oklch(0.65 0.14 200 / 0.25)', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.13 200)', fontWeight: 600, marginBottom: 6 }}>
+                  Semantic Match (paraphrase detection, free/local - see AI Model Monitoring)
+                </div>
+                <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>
+                  Closest reference match: <span style={{ color: '#eef0f6' }}>"{Object.values(nlp.semanticUnderstanding.topMatches).sort((a, b) => b.similarity - a.similarity)[0]?.phrase}"</span>
+                  {' '}(similarity {Object.values(nlp.semanticUnderstanding.topMatches).sort((a, b) => b.similarity - a.similarity)[0]?.similarity})
+                </div>
+              </div>
+            )}
+
             {nlp?.suicidalIdeationFlag && (
               <div style={{ background: 'oklch(0.62 0.21 25 / 0.12)', border: '1px solid oklch(0.62 0.21 25 / 0.35)', borderRadius: 14, padding: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(0.75 0.18 25)', marginBottom: 4 }}>Suicidal Ideation Language Flagged</div>

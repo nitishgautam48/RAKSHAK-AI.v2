@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     narrative_llm_model: str = "claude-haiku-4-5-20251001"
 
+    # Free, local, no-API-key alternative/complement to the LLM pass above
+    # (see engines/semantic_engine.py) - on by default since there's no
+    # cost/key gate, unlike the LLM pass. Set to true to skip it entirely,
+    # e.g. on a memory-constrained deployment that can't afford the ~220MB
+    # embedding model, or to avoid the one-time download on a host with
+    # restricted network access.
+    disable_semantic_analysis: bool = False
+
     model_registry_path: str = str(BASE_DIR / "data" / "model_registry.json")
     dataset_registry_path: str = str(BASE_DIR / "data" / "dataset_registry.json")
     eval_results_path: str = str(BASE_DIR / "data" / "eval_results.json")

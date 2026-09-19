@@ -20,6 +20,7 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.engines.speech_engine import SpeechToTextProvider, TranscriptionResult
+from app.engines.semantic_engine import SemanticIndicators
 from app.mlops import degradation
 
 SERVICE_KEY_HEADERS = {"X-Service-Key": main.settings.service_key}
@@ -57,6 +58,13 @@ def _isolate_degradation_log(monkeypatch, tmp_path):
     # adding task #123's logging: the pre-existing failure-path tests below
     # had exactly this leak until this fixture was added).
     monkeypatch.setattr(degradation, "_log_path", lambda: tmp_path / "degradation_events.jsonl")
+    # This file tests STT/voice-DSP wiring, not the semantic engine (see
+    # test_semantic_engine.py for that) - the real semantic engine tries to
+    # download its model on every call, which both fails in this sandbox
+    # (no network - see semantic_engine.py's docstring) and would make these
+    # tests depend on real network conditions/speed. Stubbed to a clean
+    # "unavailable, no error" result so it never contributes noise here.
+    monkeypatch.setattr(main.semantic_engine, "analyze", lambda text: SemanticIndicators(available=False, error=None))
 
 
 def test_default_provider_ignores_audio_and_uses_typed_narrative(client, monkeypatch):

@@ -14,6 +14,7 @@ from app.engines import (
     llm_engine,
     nlp_engine,
     recommendation_engine,
+    semantic_engine,
     speech_engine,
     svi_engine,
     voice_engine,
@@ -42,6 +43,16 @@ def register_model_versions() -> None:
         "llm_understanding",
         settings.narrative_llm_model if settings.anthropic_api_key else "disabled",
         {"origin": "llm", "enabled": bool(settings.anthropic_api_key), "categories": llm_engine.CATEGORIES},
+    )
+    # Always "enabled" (no cost/key gate, unlike the LLM pass above) - it
+    # simply reports available=False per-request if the model can't load
+    # (fastembed missing, or no network to download it - see
+    # semantic_engine.py's docstring), which is a runtime/deployment
+    # condition, not a registry-time one.
+    registry.register_model_version(
+        "semantic_understanding",
+        semantic_engine.MODEL_NAME,
+        {"origin": "embedding_similarity", "categories": semantic_engine.BLENDABLE_CATEGORIES},
     )
 
 
@@ -139,6 +150,30 @@ def assess(body: AssessRequest) -> dict:
         # a log a wider set of admins can read.
         degradation.log_degradation("llm", llm_result.error.split(":", 1)[0])
 
+    # Free, local, no-API-key alternative/complement to the LLM pass above -
+    # see semantic_engine.py's docstring for why both exist (this catches
+    # paraphrases via embedding similarity, at zero cost, but is a cruder
+    # signal than genuine LLM comprehension). On by default since there's no
+    # cost/key gate; degrades to available=False on any failure (fastembed
+    # not installed, model not downloaded - needs real internet access, see
+    # that file's docstring). Same max()-only blend rule as every other
+    # additive signal here.
+    semantic_result = semantic_engine.analyze(analysis_text)
+    if semantic_result.available:
+        for category in semantic_engine.BLENDABLE_CATEGORIES:
+            field_name = f"{category}_score"
+            current = getattr(nlp_result, field_name)
+            setattr(nlp_result, field_name, max(current, semantic_result.scores[category]))
+        # A strong semantic match to suicidal-ideation phrasing sets the
+        # flag the same "OR, never suppress" way nlp_engine's own structural
+        # end-life regex does - a high bar (70/100, well above the 50-point
+        # midpoint of SIMILARITY_FLOOR/CEILING) since this drives a boolean
+        # safety flag, not a graded score.
+        if semantic_result.suicidal_ideation_similarity >= 70.0:
+            nlp_result.suicidal_ideation_flag = True
+    elif semantic_result.error not in (None, "empty_text", "disabled_by_config"):
+        degradation.log_degradation("semantic", semantic_result.error.split(":", 1)[0])
+
     emotion_result = emotion_engine.analyze(nlp_result, voice_result)
 
     svi_inputs = svi_engine.SVIInputs(
@@ -221,6 +256,16 @@ def assess(body: AssessRequest) -> dict:
                     "injectionSuspected": llm_result.injection_suspected,
                 }
                 if llm_result.available
+                else None
+            ),
+            "semanticUnderstanding": (
+                {
+                    "model": semantic_result.model,
+                    "scores": semantic_result.scores,
+                    "suicidalIdeationSimilarity": semantic_result.suicidal_ideation_similarity,
+                    "topMatches": {k: {"phrase": v[0], "similarity": v[1]} for k, v in semantic_result.top_matches.items()},
+                }
+                if semantic_result.available
                 else None
             ),
         },

@@ -48,7 +48,7 @@ export default function AiModelMonitoring() {
       .finally(() => setLoading(false));
   }, []);
 
-  const ENGINE_DISPLAY_NAME = { stt: 'Speech-to-text', voice_dsp: 'Voice-stress DSP', llm: 'LLM narrative understanding' };
+  const ENGINE_DISPLAY_NAME = { stt: 'Speech-to-text', voice_dsp: 'Voice-stress DSP', llm: 'LLM narrative understanding', semantic: 'Semantic paraphrase detection' };
 
   const activeModels = (registry?.models ?? []).filter((m) => m.status === 'active');
 

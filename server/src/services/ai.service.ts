@@ -47,6 +47,12 @@ export interface AssessResponse {
     nativeReviewRecommended: boolean;
     nativeReviewMatchedTerms: string[];
     llmUnderstanding: { model: string; rationale: string; scores: Record<string, number>; injectionSuspected: boolean } | null;
+    semanticUnderstanding: {
+      model: string;
+      scores: Record<string, number>;
+      suicidalIdeationSimilarity: number;
+      topMatches: Record<string, { phrase: string; similarity: number }>;
+    } | null;
   };
   emotion: {
     fear: number; anxiety: number; distress: number; sadness: number; anger: number; hope: number; neutral: number;

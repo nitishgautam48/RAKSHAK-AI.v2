@@ -30,8 +30,13 @@ export default function RiskIntelligence() {
     }).catch(() => {});
   }, []);
 
-  const trendPoints = trend.length ? trend.map((w, i) => {
-    const x = trend.length > 1 ? (i / (trend.length - 1)) * 600 : 300;
+  // See DashboardOverview.jsx's note: a lone data point can't form a line,
+  // so it's rendered as a single marker instead of an (invisible) polyline.
+  const singleTrendPoint = trend.length === 1
+    ? { x: 300, y: 160 - (trend[0].avgSvi / 100) * 150 - 5 }
+    : null;
+  const trendPoints = trend.length > 1 ? trend.map((w, i) => {
+    const x = (i / (trend.length - 1)) * 600;
     const y = 160 - (w.avgSvi / 100) * 150 - 5;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ') : '';
@@ -68,6 +73,13 @@ export default function RiskIntelligence() {
           <svg viewBox="0 0 600 160" style={{ width: '100%', height: 160 }}>
             <polyline points={trendPoints} fill="none" stroke="oklch(0.7 0.17 55)" strokeWidth="2.5"><title>Weekly average SVI</title></polyline>
             {historicalPoints && <polyline points={historicalPoints} fill="none" stroke="#5c6178" strokeWidth="2" strokeDasharray="4,4"><title>Overall average for comparison</title></polyline>}
+          </svg>
+        ) : singleTrendPoint ? (
+          <svg viewBox="0 0 600 160" style={{ width: '100%', height: 160 }}>
+            <circle cx={singleTrendPoint.x} cy={singleTrendPoint.y} r="5" fill="oklch(0.7 0.17 55)" />
+            <text x={singleTrendPoint.x} y={singleTrendPoint.y - 14} textAnchor="middle" fontSize="12" fill="#8b91a3">
+              {Math.round(trend[0].avgSvi)} avg SVI - need a 2nd week to show a trend
+            </text>
           </svg>
         ) : (
           <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5c6178', fontSize: 12.5 }}>No scored assessments yet.</div>

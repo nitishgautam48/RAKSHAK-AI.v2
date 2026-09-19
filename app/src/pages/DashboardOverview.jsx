@@ -67,9 +67,16 @@ export default function DashboardOverview() {
   const weeklyMax = weeklyActivity.length ? Math.max(...weeklyActivity.map((d) => d.count), 1) : 1;
   const recoMax = recoOverview.length ? Math.max(...recoOverview.map((r) => r.count), 1) : 1;
 
-  const trendPoints = sviTrend.length
+  // A single data point can't describe a trend line - the old code fed it
+  // through the same "line + baseline-to-baseline fill" path used for 2+
+  // points, which drew a meaningless triangle (one point joined straight
+  // down to both bottom corners) rather than an empty/no-trend state.
+  const singleTrendPoint = sviTrend.length === 1
+    ? { x: 300, y: 160 - (sviTrend[0].avgSvi / 100) * 150 - 5 }
+    : null;
+  const trendPoints = sviTrend.length > 1
     ? sviTrend.map((w, i) => {
-        const x = sviTrend.length > 1 ? (i / (sviTrend.length - 1)) * 600 : 300;
+        const x = (i / (sviTrend.length - 1)) * 600;
         const y = 160 - (w.avgSvi / 100) * 150 - 5;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       }).join(' ')
@@ -105,6 +112,13 @@ export default function DashboardOverview() {
             <svg viewBox="0 0 600 160" style={{ width: '100%', height: 160 }}>
               <polyline points={trendPoints} fill="none" stroke="oklch(0.62 0.16 235)" strokeWidth="3" />
               <polyline points={trendArea} fill="oklch(0.5 0.14 235 / 0.12)" stroke="none" />
+            </svg>
+          ) : singleTrendPoint ? (
+            <svg viewBox="0 0 600 160" style={{ width: '100%', height: 160 }}>
+              <circle cx={singleTrendPoint.x} cy={singleTrendPoint.y} r="5" fill="oklch(0.62 0.16 235)" />
+              <text x={singleTrendPoint.x} y={singleTrendPoint.y - 14} textAnchor="middle" fontSize="12" fill="#8b91a3">
+                {Math.round(sviTrend[0].avgSvi)} avg SVI - need a 2nd week to show a trend
+              </text>
             </svg>
           ) : (
             <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5c6178', fontSize: 12.5 }}>No scored assessments yet.</div>

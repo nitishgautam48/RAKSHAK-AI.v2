@@ -17,13 +17,21 @@ function InsightCard({ title, color, items }) {
 }
 
 function toPoints(values, w, h) {
-  if (!values.length) return '';
+  if (values.length < 2) return '';
   const max = Math.max(...values, 1);
   return values.map((v, i) => {
-    const x = values.length > 1 ? (i / (values.length - 1)) * w : w / 2;
+    const x = (i / (values.length - 1)) * w;
     const y = h - (v / max) * h;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
+}
+
+// A single value can't form a line (see toPoints) - a lone circle marker at
+// least shows something instead of an invisible one-point polyline.
+function singlePoint(values, w, h) {
+  if (values.length !== 1) return null;
+  const max = Math.max(values[0], 1);
+  return { x: w / 2, y: h - (values[0] / max) * h };
 }
 
 export default function ExecutiveDashboard() {
@@ -142,11 +150,17 @@ export default function ExecutiveDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
         <div style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 20 }}>
           <div style={{ font: '600 13px Sora,sans-serif', marginBottom: 12 }}>Monthly Complaint Trend</div>
-          <svg viewBox="0 0 260 90" style={{ width: '100%', height: 90 }}><polyline points={toPoints(monthlyTrend.map((m) => m.count), 260, 90)} fill="none" stroke="oklch(0.62 0.16 235)" strokeWidth="2.5"><title>Monthly complaint volume nationally</title></polyline></svg>
+          <svg viewBox="0 0 260 90" style={{ width: '100%', height: 90 }}>
+            <polyline points={toPoints(monthlyTrend.map((m) => m.count), 260, 90)} fill="none" stroke="oklch(0.62 0.16 235)" strokeWidth="2.5"><title>Monthly complaint volume nationally</title></polyline>
+            {(() => { const p = singlePoint(monthlyTrend.map((m) => m.count), 260, 90); return p && <circle cx={p.x} cy={p.y} r="4" fill="oklch(0.62 0.16 235)" />; })()}
+          </svg>
         </div>
         <div style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 20 }}>
           <div style={{ font: '600 13px Sora,sans-serif', marginBottom: 12 }}>SVI Trend</div>
-          <svg viewBox="0 0 260 90" style={{ width: '100%', height: 90 }}><polyline points={toPoints(sviTrend.map((s) => s.avgSvi), 260, 90)} fill="none" stroke="oklch(0.7 0.17 55)" strokeWidth="2.5"><title>Weekly average SVI</title></polyline></svg>
+          <svg viewBox="0 0 260 90" style={{ width: '100%', height: 90 }}>
+            <polyline points={toPoints(sviTrend.map((s) => s.avgSvi), 260, 90)} fill="none" stroke="oklch(0.7 0.17 55)" strokeWidth="2.5"><title>Weekly average SVI</title></polyline>
+            {(() => { const p = singlePoint(sviTrend.map((s) => s.avgSvi), 260, 90); return p && <circle cx={p.x} cy={p.y} r="4" fill="oklch(0.7 0.17 55)" />; })()}
+          </svg>
         </div>
         <div style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 20 }}>
           <div style={{ font: '600 13px Sora,sans-serif', marginBottom: 12 }}>Intervention Completion Rate</div>

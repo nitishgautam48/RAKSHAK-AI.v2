@@ -11,6 +11,7 @@ import { broadcastCaseEvent, broadcastToVictim } from '../services/socket.servic
 import { notify } from '../services/notification.service.js';
 import { RoleName, AssignmentRole } from '@prisma/client';
 import { getPriorityQueue } from '../services/priorityQueue.service.js';
+import { runAutoEscalationCheck } from '../services/autoEscalation.service.js';
 
 export const casesRouter = Router();
 casesRouter.use(requireAuth);
@@ -23,6 +24,18 @@ casesRouter.get('/priority-queue', asyncHandler(async (req, res) => {
   const limit = Math.min(200, Number(qStr(req, 'limit') ?? 50) || 50);
   res.json(await getPriorityQueue(prisma, limit));
 }));
+
+// Manual trigger for the same check index.ts runs on a 15-minute interval -
+// lets an administrator force a check on demand rather than waiting for the
+// next tick, and is how this is verified without waiting on a real timer.
+casesRouter.post(
+  '/priority-queue/run-escalation-check',
+  requireRoles(RoleName.ADMINISTRATOR, RoleName.STATE_ADMINISTRATOR),
+  asyncHandler(async (_req, res) => {
+    const results = await runAutoEscalationCheck(prisma);
+    res.json({ escalated: results.length, results });
+  }),
+);
 
 casesRouter.get('/', asyncHandler(async (req, res) => {
   const { page, pageSize, skip, take } = parsePagination(req);

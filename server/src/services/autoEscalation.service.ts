@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { getPriorityQueue } from './priorityQueue.service.js';
+import { getPriorityQueue, STATUTORY_URGENCY_CAP, STATUTORY_BREACH_BASE_FRACTION, RETALIATION_PER_RECONTACT } from './priorityQueue.service.js';
 import { notify } from './notification.service.js';
 
 // Closes the loop on priorityQueue.service.ts: the aging bonus there
@@ -31,13 +31,30 @@ export const STALE_HOURS_THRESHOLD = 48;
 export const COOLDOWN_HOURS = 24;
 
 export interface EscalationTrigger {
-  reason: 'priority_threshold' | 'stale_unactioned';
+  reason: 'priority_threshold' | 'stale_unactioned' | 'statutory_deadline_breach' | 'repeat_contact_pattern';
   message: string;
 }
 
+// A statutory deadline is treated as actually "breached" (worth its own
+// distinct escalation reason, not just folded into priority_threshold) once
+// its urgency bonus reaches the same base fraction of the cap that
+// priorityQueue.service.ts uses to mark a deadline as missed rather than
+// merely approaching - see computeStatutoryUrgencyBonus there.
+const STATUTORY_BREACH_TRIGGER_THRESHOLD = STATUTORY_URGENCY_CAP * STATUTORY_BREACH_BASE_FRACTION;
+// One real re-contact is enough to warrant its own distinct alert - a
+// victim contacting an already-open, unresolved case again (rather than a
+// fresh complaint) is a meaningful signal on its own, not something to wait
+// on accumulating.
+const RETALIATION_TRIGGER_THRESHOLD = RETALIATION_PER_RECONTACT;
+
 // Pure decision function - no I/O - so the trigger logic itself is directly
 // unit-testable without a database.
-export function evaluateEscalationTriggers(priorityScore: number, hoursWaiting: number): EscalationTrigger[] {
+export function evaluateEscalationTriggers(
+  priorityScore: number,
+  hoursWaiting: number,
+  statutoryUrgencyBonus = 0,
+  retaliationBonus = 0,
+): EscalationTrigger[] {
   const triggers: EscalationTrigger[] = [];
   if (priorityScore >= PRIORITY_THRESHOLD) {
     triggers.push({
@@ -49,6 +66,22 @@ export function evaluateEscalationTriggers(priorityScore: number, hoursWaiting: 
     triggers.push({
       reason: 'stale_unactioned',
       message: `No recorded action for ${hoursWaiting.toFixed(1)} hours (threshold ${STALE_HOURS_THRESHOLD}h).`,
+    });
+  }
+  // Independent of priority_threshold: a case can miss its statutory
+  // deadline while scoring well below 75 on severity alone - this is a
+  // compliance failure that needs legal/administrative eyes regardless of
+  // how the case reads emotionally.
+  if (statutoryUrgencyBonus >= STATUTORY_BREACH_TRIGGER_THRESHOLD) {
+    triggers.push({
+      reason: 'statutory_deadline_breach',
+      message: `Statutory investigation deadline appears to have been missed (urgency ${statutoryUrgencyBonus.toFixed(1)}/${STATUTORY_URGENCY_CAP}) - needs legal/compliance review.`,
+    });
+  }
+  if (retaliationBonus >= RETALIATION_TRIGGER_THRESHOLD) {
+    triggers.push({
+      reason: 'repeat_contact_pattern',
+      message: `Victim has re-contacted this case after the original complaint - review for possible retaliation or an unresolved unmet need.`,
     });
   }
   return triggers;
@@ -72,7 +105,12 @@ export async function runAutoEscalationCheck(prisma: PrismaClient) {
   const results: { caseId: string; caseNumber: string; reason: string; notified: number }[] = [];
 
   for (const item of queue) {
-    const triggers = evaluateEscalationTriggers(item.priority.priorityScore, item.priority.hoursWaiting);
+    const triggers = evaluateEscalationTriggers(
+      item.priority.priorityScore,
+      item.priority.hoursWaiting,
+      item.priority.statutoryUrgencyBonus,
+      item.priority.retaliationBonus,
+    );
     for (const trigger of triggers) {
       if (await alreadyNotifiedRecently(prisma, item.caseId, trigger.reason)) continue;
 

@@ -88,8 +88,9 @@ export default function InterventionCommand() {
       <div style={{ ...card, marginBottom: 16 }}>
         <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 2 }}>Priority Queue &middot; What to look at first</div>
         <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>
-          Ranked by SVI value plus a disclosed, capped bonus for time spent unactioned (+0.5 pt/hour, capped at +20) - so a case
-          nobody has touched surfaces over time instead of sitting buried behind newer, higher-severity ones indefinitely.
+          Ranked by SVI value plus disclosed, capped modifiers for time unactioned, recorded victim vulnerability, and a worsening
+          distress trend - plus statutory-deadline pressure and repeated re-contact after the original complaint, which can push a
+          case to the top even at moderate severity (see the &#9888; note on a row, and hover the score for the full breakdown).
           Excludes closed cases.
         </div>
         {queueLoading && <div style={{ color: '#7d8399', fontSize: 13 }}>Loading…</div>}
@@ -109,10 +110,27 @@ export default function InterventionCommand() {
                   <div style={{ fontSize: 11, color: '#5c6178', marginTop: 2 }}>
                     {q.incidentType} &middot; {q.victim.district}, {q.victim.state} &middot; waiting {q.priority.hoursWaiting}h &middot; {q.assignedTo.length ? q.assignedTo.map((a) => a.name).join(', ') : 'Unassigned'}
                   </div>
+                  {q.priority.reasons.length > 0 && (
+                    <div style={{ fontSize: 10, color: 'oklch(0.75 0.15 55)', marginTop: 3 }}>
+                      &#9888; {q.priority.reasons.join(' · ')}
+                    </div>
+                  )}
                 </div>
-                <div title={`SVI ${q.priority.sviValue} + aging bonus ${q.priority.agingBonus} (waited ${q.priority.hoursWaiting}h)`} style={{ textAlign: 'right', flex: 'none' }}>
+                <div
+                  title={[
+                    `SVI ${q.priority.sviValue}`,
+                    `aging +${q.priority.agingBonus}`,
+                    q.priority.vulnerabilityBonus > 0 && `vulnerability +${q.priority.vulnerabilityBonus}`,
+                    q.priority.trendBonus > 0 && `worsening trend +${q.priority.trendBonus}`,
+                    q.priority.statutoryUrgencyBonus > 0 && `statutory deadline +${q.priority.statutoryUrgencyBonus}`,
+                    q.priority.retaliationBonus > 0 && `re-contact +${q.priority.retaliationBonus}`,
+                    q.priority.reviewUncertaintyBonus > 0 && `low-confidence review +${q.priority.reviewUncertaintyBonus}`,
+                    `(waited ${q.priority.hoursWaiting}h)`,
+                  ].filter(Boolean).join(' | ')}
+                  style={{ textAlign: 'right', flex: 'none' }}
+                >
                   <div style={{ font: '700 16px Sora,sans-serif' }}>{q.priority.priorityScore}</div>
-                  <div style={{ fontSize: 9.5, color: '#5c6178' }}>{q.priority.sviValue} SVI +{q.priority.agingBonus}</div>
+                  <div style={{ fontSize: 9.5, color: '#5c6178' }}>{q.priority.sviValue} SVI +{Math.round((q.priority.priorityScore - q.priority.sviValue) * 10) / 10}</div>
                 </div>
                 <button
                   onClick={() => (assigningCaseId === q.caseId ? setAssigningCaseId(null) : openAssignPicker(q.caseId))}

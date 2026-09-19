@@ -1,5 +1,6 @@
 import { useAssessmentSelector } from '../lib/useAssessmentSelector';
 import ComplaintSelector from '../components/ComplaintSelector';
+import TranscriptSourceBadge from '../components/TranscriptSourceBadge';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 
@@ -11,8 +12,15 @@ function scoreLevel(v) {
 }
 
 export default function NlpAnalysis() {
-  const { complaints, selectedId, setSelectedId, complaint, engineOutputs, loading } = useAssessmentSelector();
+  const { complaints, selectedId, setSelectedId, complaint, assessment, engineOutputs, loading } = useAssessmentSelector();
   const nlp = engineOutputs.nlp;
+  const voiceRecording = assessment?.voiceRecording;
+  // What the AI engines actually scored - assessment.sourceText, NOT
+  // complaint.narrative. For a voice-only complaint with real transcription
+  // enabled, those are different texts (see task #119/#121): the complaint's
+  // narrative field is just a placeholder, and the real spoken transcript is
+  // what produced the scores shown on this page.
+  const analyzedText = assessment?.sourceText ?? complaint?.narrative;
 
   const indicators = nlp ? [
     ['Trauma', nlp.traumaScore], ['Fear', nlp.fearScore], ['Threat', nlp.threatScore],
@@ -28,14 +36,22 @@ export default function NlpAnalysis() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={card}>
-              <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 12 }}>Victim Narrative</div>
-              <div style={{ fontSize: 13, lineHeight: 1.7, color: '#c4c8d4', background: 'rgba(255,255,255,.03)', borderRadius: 10, padding: 16 }}>{complaint.narrative}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ font: '600 14px Sora,sans-serif' }}>Analyzed Text</div>
+                {assessment && <TranscriptSourceBadge source={voiceRecording?.transcriptSrc} hasAudio={!!voiceRecording} />}
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.7, color: '#c4c8d4', background: 'rgba(255,255,255,.03)', borderRadius: 10, padding: 16 }}>{analyzedText}</div>
+              {voiceRecording?.transcriptSrc === 'whisper_local' && analyzedText !== complaint.narrative && (
+                <div style={{ fontSize: 11, color: '#5c6178', marginTop: 8 }}>
+                  This is the machine transcript of the submitted audio, not the complaint's typed narrative field.
+                </div>
+              )}
             </div>
 
             {nlp && (
               <div className="tsa-card-hover" style={card}>
                 <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 4 }}>Matched Indicator Keywords</div>
-                <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>English + Hindi lexicon scorer &middot; {nlp.wordCount} words analyzed</div>
+                <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>English + 7 Indian languages lexicon scorer &middot; {nlp.wordCount} words analyzed</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 10px' }}>
                   {nlp.matchedKeywords.length === 0 && <div style={{ color: '#5c6178', fontSize: 12.5 }}>No indicator keywords matched in this narrative.</div>}
                   {nlp.matchedKeywords.map((kw) => (

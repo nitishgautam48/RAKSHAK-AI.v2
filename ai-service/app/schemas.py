@@ -23,6 +23,7 @@ class ContributionOut(BaseModel):
 class AssessResponse(BaseModel):
     modelVersions: dict[str, str]
     transcript: dict
+    audioReceived: bool
     voice: dict | None
     nlp: dict
     emotion: dict

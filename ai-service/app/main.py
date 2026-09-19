@@ -160,6 +160,13 @@ def assess(body: AssessRequest) -> dict:
     return {
         "modelVersions": registry.active_versions(),
         "transcript": asdict(transcript),
+        # Distinct from both "transcript.source" and "voice" being present:
+        # audio can be received and yet neither successfully transcribed by
+        # a real ASR provider nor successfully DSP-analyzed (corrupt/
+        # unsupported audio, or STT_PROVIDER left at the operator_transcript
+        # default) - without this flag, that state is indistinguishable from
+        # "no audio was ever submitted" to anything downstream.
+        "audioReceived": audio_bytes is not None,
         "voice": (
             {
                 "speakingSpeedWpm": voice_result.speaking_speed_wpm,

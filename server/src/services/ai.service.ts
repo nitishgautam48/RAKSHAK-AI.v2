@@ -11,6 +11,11 @@ export interface AssessRequest {
 export interface AssessResponse {
   modelVersions: Record<string, string>;
   transcript: { transcript: string; language_detected: string; confidence: number; source: string };
+  // Distinct from transcript.source and voice: audio can be received and
+  // yet neither transcribed by a real STT provider nor DSP-analyzed
+  // (corrupt/unsupported audio, or STT not configured) - without this,
+  // that state is indistinguishable from "no audio was ever submitted."
+  audioReceived: boolean;
   voice: {
     speakingSpeedWpm: number | null;
     pauseFrequency: string;

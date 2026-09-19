@@ -1,5 +1,6 @@
 import { useAssessmentSelector } from '../lib/useAssessmentSelector';
 import ComplaintSelector from '../components/ComplaintSelector';
+import TranscriptSourceBadge from '../components/TranscriptSourceBadge';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 
@@ -25,7 +26,7 @@ export default function VoiceAnalysis() {
       <ComplaintSelector complaints={complaints} selectedId={selectedId} onChange={setSelectedId} />
       {loading && <div style={{ color: '#7d8399', fontSize: 13 }}>Loading…</div>}
 
-      {!loading && !voice && (
+      {!loading && !voiceRecording && (
         <div style={{ ...card, textAlign: 'center', padding: 40, color: '#7d8399' }}>
           {assessment ? (
             <>No audio was attached to this complaint's most recent assessment, so there is no voice signal to analyze. Attach an audio file from Real-Time Assessment to see real pitch/energy/pause DSP output here.</>
@@ -35,27 +36,38 @@ export default function VoiceAnalysis() {
         </div>
       )}
 
-      {!loading && voice && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {!loading && voiceRecording && !voice && (
+        <div style={{ ...card, textAlign: 'center', padding: 40, color: '#7d8399', marginBottom: 16 }}>
+          Audio was attached to this assessment, but voice-stress DSP (pitch/energy/pause analysis) could not be run on it -
+          the audio format or content wasn't usable for that. {voiceRecording.transcript ? 'A transcript is still available below.' : 'No transcript is available either.'}
+        </div>
+      )}
+
+      {!loading && voiceRecording && (voiceRecording.transcript || voice) && (
+        <div style={{ display: 'grid', gridTemplateColumns: voice ? '1fr 1fr' : '1fr', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={card}>
-              <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 14 }}>Energy Contour (real DSP output)</div>
-              <svg viewBox="0 0 300 80" style={{ width: '100%', height: 80 }}>
-                <polyline points={toPoints(voice.energyContour, 300, 80)} fill="none" stroke="oklch(0.65 0.14 200)" strokeWidth="2" />
-              </svg>
-              <div style={{ fontSize: 12, color: '#7d8399', marginTop: 10 }}>
-                Language: <span style={{ color: '#eef0f6' }}>{voiceRecording?.languageCode ?? 'Unknown'}</span>
-                {voiceRecording?.transcriptSrc && <> &middot; Transcript source: <span style={{ color: '#eef0f6' }}>{voiceRecording.transcriptSrc.replace(/_/g, ' ')}</span></>}
-              </div>
-            </div>
-            {voiceRecording?.transcript && (
+            {voice && (
               <div style={card}>
-                <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 12 }}>Transcript</div>
-                <div style={{ fontSize: 13, lineHeight: 1.7, color: '#c4c8d4' }}>{voiceRecording.transcript}</div>
+                <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 14 }}>Energy Contour (real DSP output)</div>
+                <svg viewBox="0 0 300 80" style={{ width: '100%', height: 80 }}>
+                  <polyline points={toPoints(voice.energyContour, 300, 80)} fill="none" stroke="oklch(0.65 0.14 200)" strokeWidth="2" />
+                </svg>
+                <div style={{ fontSize: 12, color: '#7d8399', marginTop: 10 }}>
+                  Language: <span style={{ color: '#eef0f6' }}>{voiceRecording?.languageCode ?? 'Unknown'}</span>
+                </div>
               </div>
             )}
+            <div style={card}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ font: '600 14px Sora,sans-serif' }}>Transcript</div>
+                <TranscriptSourceBadge source={voiceRecording?.transcriptSrc} hasAudio={!!voiceRecording} />
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.7, color: '#c4c8d4' }}>
+                {voiceRecording?.transcript || <span style={{ color: '#5c6178' }}>No transcript text available.</span>}
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {voice && <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={card}>
               <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 14 }}>Pitch Contour (autocorrelation, real DSP)</div>
               <svg viewBox="0 0 300 100" style={{ width: '100%', height: 100 }}>
@@ -79,7 +91,7 @@ export default function VoiceAnalysis() {
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
         </div>
       )}
     </div>

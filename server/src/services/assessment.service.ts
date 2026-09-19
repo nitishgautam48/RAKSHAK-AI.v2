@@ -9,23 +9,47 @@ export interface PersistAssessmentInput {
   actorId: string | null; // null for system/seed-generated or emergency-token-originated assessments
 }
 
+// A real machine transcript (ai.transcript.source === 'whisper_local') is
+// what every AI engine actually analyzed for a voice-only complaint (see
+// ai-service/app/main.py's analysis_text) - submittedNarrative in that case
+// is only the VOICE_ONLY_PLACEHOLDER text. sourceText must record what was
+// truly analyzed, not just what the client happened to submit as the
+// narrative field, or every downstream reader (NLP Analysis page, audit
+// trail) would show text disconnected from the scores displayed next to it.
+// Pure function, exported for direct unit testing without a database.
+export function deriveAnalyzedText(ai: { transcript: Pick<AssessResponse['transcript'], 'transcript' | 'source'> }, submittedNarrative: string): string {
+  return ai.transcript.source === 'whisper_local' && ai.transcript.transcript.trim()
+    ? ai.transcript.transcript
+    : submittedNarrative;
+}
+
 // Shared by the live /api/assessments route and the seed script, so seeded
 // demo data is produced by the exact same real AI pipeline + persistence
 // path a live assessment goes through - seeded dashboards show genuinely
 // computed scores, not hand-authored numbers.
 export async function persistAssessment(prisma: PrismaClient, input: PersistAssessmentInput, ai: AssessResponse) {
   return prisma.$transaction(async (tx) => {
+    const analyzedText = deriveAnalyzedText(ai, input.narrative);
+
     const created = await tx.assessment.create({
       data: {
         victimId: input.victimId,
         complaintId: input.complaintId,
         caseId: input.caseId,
-        sourceText: input.narrative,
+        sourceText: analyzedText,
         status: 'completed',
       },
     });
 
-    if (ai.voice) {
+    // Gating this on ai.voice (DSP success) alone used to mean: if real
+    // audio was submitted and genuinely transcribed by Whisper, but voice-
+    // stress DSP happened to fail on that same audio (unsupported/corrupted
+    // for librosa/soundfile even though faster-whisper could read it), the
+    // real transcript was silently discarded - never persisted anywhere.
+    // Gating on ai.audioReceived instead means any real audio submission
+    // leaves a record (even a bare "audio attached, not transcribed" one
+    // when both DSP and STT come up empty), so nothing is silently lost.
+    if (ai.audioReceived) {
       await tx.voiceRecording.create({
         data: {
           assessmentId: created.id,

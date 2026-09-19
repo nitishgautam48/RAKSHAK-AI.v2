@@ -11,6 +11,8 @@ import { broadcastCaseEvent } from '../services/socket.service.js';
 import { recordConsent } from '../services/consent.service.js';
 import { victimToDto } from '../lib/dto.js';
 import { RoleName } from '@prisma/client';
+import { findOpenCaseForVictim } from '../services/caseLinking.service.js';
+import { notify } from '../services/notification.service.js';
 
 export const complaintsRouter = Router();
 complaintsRouter.use(requireAuth);
@@ -105,7 +107,13 @@ complaintsRouter.post('/', asyncHandler(async (req, res) => {
     include: { victim: true },
   });
 
-  const kase = await prisma.case.create({
+  // De-duplication: a survivor who already has an open case gets this new
+  // complaint linked into it instead of a second, disconnected case - see
+  // caseLinking.service.ts for why this doesn't (yet) use a real FK.
+  const existingCase = await findOpenCaseForVictim(prisma, complaint.victimId);
+  const linkedToExistingCase = existingCase !== null;
+
+  const kase = existingCase ?? await prisma.case.create({
     data: {
       caseNumber: genCaseNumber(),
       complaintId: complaint.id,
@@ -114,9 +122,30 @@ complaintsRouter.post('/', asyncHandler(async (req, res) => {
       riskLevel: 'MODERATE',
     },
   });
-  await prisma.caseTimeline.create({
-    data: { caseId: kase.id, actorId: req.user!.sub, eventType: 'status_change', summary: 'Complaint registered and case opened.' },
-  });
+
+  if (linkedToExistingCase) {
+    await prisma.caseTimeline.create({
+      data: {
+        caseId: kase.id,
+        actorId: req.user!.sub.startsWith('emergency:') ? null : req.user!.sub,
+        eventType: 'note',
+        summary: `Additional complaint filed by the same survivor (${complaint.code}: ${complaint.incidentType}) - linked to this existing open case rather than opening a new one.`,
+        metaJson: JSON.stringify({ linkedComplaintId: complaint.id }),
+      },
+    });
+    for (const assignment of existingCase!.assignments) {
+      await notify({
+        userId: assignment.userId,
+        eventType: 'case_update',
+        title: 'New complaint linked to your case',
+        body: `${complaint.victim.displayCode} filed another complaint (${complaint.code}), linked to case ${kase.caseNumber} since it's already open.`,
+      });
+    }
+  } else {
+    await prisma.caseTimeline.create({
+      data: { caseId: kase.id, actorId: req.user!.sub, eventType: 'status_change', summary: 'Complaint registered and case opened.' },
+    });
+  }
 
   // Consent is captured at intake, as it would be on the physical/telephonic
   // helpline registration form - this is what makes requireConsent() in the
@@ -124,9 +153,9 @@ complaintsRouter.post('/', asyncHandler(async (req, res) => {
   await recordConsent({ victimId: complaint.victimId, userId: req.user!.sub.startsWith('emergency:') ? undefined : req.user!.sub, scope: 'data_sharing', granted: true });
   await recordConsent({ victimId: complaint.victimId, userId: req.user!.sub.startsWith('emergency:') ? undefined : req.user!.sub, scope: 'ai_assessment', granted: true });
 
-  await recordAudit({ req, action: 'CREATE', entityType: 'Complaint', entityId: complaint.id });
-  broadcastCaseEvent(kase.id, 'complaint:new', { complaint, case: kase });
-  res.status(201).json({ complaint, case: kase });
+  await recordAudit({ req, action: 'CREATE', entityType: 'Complaint', entityId: complaint.id, meta: { linkedToExistingCase } });
+  broadcastCaseEvent(kase.id, linkedToExistingCase ? 'complaint:linked' : 'complaint:new', { complaint, case: kase, linkedToExistingCase });
+  res.status(201).json({ complaint, case: kase, linkedToExistingCase });
 }));
 
 const statusSchema = z.object({

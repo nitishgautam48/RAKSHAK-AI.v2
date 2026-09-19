@@ -102,7 +102,7 @@ export default function FileComplaint() {
     setSubmitting(true);
     setError('');
     try {
-      const { complaint } = await api.post('/api/complaints', {
+      const { complaint, linkedToExistingCase } = await api.post('/api/complaints', {
         incidentType,
         narrative: narrativeToSend,
         channel: 'portal',
@@ -135,7 +135,7 @@ export default function FileComplaint() {
         await api.postForm('/api/documents', form).catch(() => {});
       }
 
-      setResult(complaint);
+      setResult({ ...complaint, linkedToExistingCase });
       setNarrative('');
       discardRecording();
       setDocFile(null);
@@ -230,7 +230,9 @@ export default function FileComplaint() {
 
       {result && (
         <div style={{ padding: 14, borderRadius: 12, background: 'oklch(0.72 0.15 145 / 0.12)', border: '1px solid oklch(0.72 0.15 145 / 0.35)', color: 'oklch(0.8 0.13 145)', fontSize: 13.5 }}>
-          Your complaint ({result.code}) has been received. A counsellor will reach out to you shortly. You are not alone.
+          {result.linkedToExistingCase
+            ? `Your complaint (${result.code}) has been added to your existing open case, so your officer sees the full picture. A counsellor will reach out to you shortly. You are not alone.`
+            : `Your complaint (${result.code}) has been received. A counsellor will reach out to you shortly. You are not alone.`}
         </div>
       )}
 

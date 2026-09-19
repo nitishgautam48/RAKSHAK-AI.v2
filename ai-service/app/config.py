@@ -25,6 +25,16 @@ class Settings(BaseSettings):
     # environment (model-weight hosts are blocked by sandbox egress policy).
     stt_provider: str = "operator_transcript"
 
+    # Optional real-language-understanding signal (see engines/llm_engine.py)
+    # to catch narratives that describe something serious without using any
+    # lexicon term - a structural limitation the keyword engine cannot fix by
+    # adding more keywords. Unset by default: this is a genuine deployment
+    # decision (a real Anthropic API key, real per-call cost, real outbound
+    # network dependency), not something to enable silently. The engine
+    # degrades to "not run" with no error when this is empty.
+    anthropic_api_key: str | None = None
+    narrative_llm_model: str = "claude-haiku-4-5-20251001"
+
     model_registry_path: str = str(BASE_DIR / "data" / "model_registry.json")
     dataset_registry_path: str = str(BASE_DIR / "data" / "dataset_registry.json")
     eval_results_path: str = str(BASE_DIR / "data" / "eval_results.json")

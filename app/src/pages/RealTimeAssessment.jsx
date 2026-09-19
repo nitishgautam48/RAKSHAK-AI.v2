@@ -178,6 +178,12 @@ export default function RealTimeAssessment() {
                   )}
                 </div>
               )}
+              {result.nlp.llmUnderstanding && (
+                <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: 'oklch(0.65 0.14 200 / 0.08)', border: '1px solid oklch(0.65 0.14 200 / 0.25)' }}>
+                  <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.13 200)', fontWeight: 600, marginBottom: 4 }}>LLM Narrative Understanding ({result.nlp.llmUnderstanding.model})</div>
+                  <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>{result.nlp.llmUnderstanding.rationale}</div>
+                </div>
+              )}
             </div>
             <div style={card}>
               <div style={{ font: '600 13px Sora,sans-serif', marginBottom: 12 }}>Emotion Distribution</div>

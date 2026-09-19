@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.engines import (
     emotion_engine,
+    llm_engine,
     nlp_engine,
     recommendation_engine,
     speech_engine,
@@ -37,6 +38,11 @@ def register_model_versions() -> None:
     registry.register_model_version("nlp", "nlp-lexicon-v1.0.0", {"origin": "rule_based", "categories": list(nlp_engine.LEXICON.keys())})
     registry.register_model_version("voice", "voice-dsp-v2.0.0", {"origin": "signal_processing", "method": "librosa_pyin_pitch+praat_jitter_shimmer_hnr"})
     registry.register_model_version("svi", svi_engine.MODEL_VERSION, {"origin": "rule_based", "weights": svi_engine.WEIGHTS})
+    registry.register_model_version(
+        "llm_understanding",
+        settings.narrative_llm_model if settings.anthropic_api_key else "disabled",
+        {"origin": "llm", "enabled": bool(settings.anthropic_api_key), "categories": llm_engine.CATEGORIES},
+    )
 
 
 def require_service_key(x_service_key: Annotated[str | None, Header()] = None) -> None:
@@ -75,6 +81,22 @@ def assess(body: AssessRequest) -> dict:
             _ = transcript_note
 
     nlp_result = nlp_engine.analyze(body.narrative)
+
+    # Optional real-language-understanding pass (see llm_engine.py's honesty
+    # notes) - catches narratives that describe something severe without
+    # using any lexicon term, which the keyword engine structurally cannot.
+    # Disabled unless ANTHROPIC_API_KEY is configured; degrades silently
+    # (available=False) on any failure. Blended via max() per category, same
+    # "can only raise, never lower" rule as every other additive signal in
+    # this pipeline - a wrong or unavailable LLM read can never suppress a
+    # real keyword hit.
+    llm_result = llm_engine.analyze(body.narrative)
+    if llm_result.available:
+        for category in llm_engine.CATEGORIES:
+            field_name = f"{category}_score"
+            current = getattr(nlp_result, field_name)
+            setattr(nlp_result, field_name, max(current, llm_result.scores[category]))
+
     emotion_result = emotion_engine.analyze(nlp_result, voice_result)
 
     svi_inputs = svi_engine.SVIInputs(
@@ -140,6 +162,11 @@ def assess(body: AssessRequest) -> dict:
             "wordCount": nlp_result.word_count,
             "authorityContextDetected": nlp_result.authority_context_detected,
             "victimTestimonyDetected": nlp_result.victim_testimony_detected,
+            "llmUnderstanding": (
+                {"model": llm_result.model, "rationale": llm_result.rationale, "scores": llm_result.scores}
+                if llm_result.available
+                else None
+            ),
         },
         "emotion": asdict(emotion_result),
         "svi": {

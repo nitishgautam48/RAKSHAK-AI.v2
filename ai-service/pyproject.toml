@@ -15,6 +15,7 @@ dependencies = [
     "soundfile>=0.12.1",
     "librosa>=0.11.0",
     "praat-parselmouth>=0.4.7",
+    "anthropic>=1.7.0",
 ]
 
 [dependency-groups]

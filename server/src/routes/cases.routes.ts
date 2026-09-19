@@ -10,9 +10,19 @@ import { recordAudit } from '../services/audit.service.js';
 import { broadcastCaseEvent, broadcastToVictim } from '../services/socket.service.js';
 import { notify } from '../services/notification.service.js';
 import { RoleName, AssignmentRole } from '@prisma/client';
+import { getPriorityQueue } from '../services/priorityQueue.service.js';
 
 export const casesRouter = Router();
 casesRouter.use(requireAuth);
+
+// Real staff worklist ordering - see priorityQueue.service.ts for the full
+// scoring rationale (severity + a disclosed, capped aging bonus for cases
+// sitting unactioned). Declared before GET /:id so "priority-queue" isn't
+// swallowed as a case id.
+casesRouter.get('/priority-queue', asyncHandler(async (req, res) => {
+  const limit = Math.min(200, Number(qStr(req, 'limit') ?? 50) || 50);
+  res.json(await getPriorityQueue(prisma, limit));
+}));
 
 casesRouter.get('/', asyncHandler(async (req, res) => {
   const { page, pageSize, skip, take } = parsePagination(req);

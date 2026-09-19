@@ -4,17 +4,21 @@ import { api } from '../lib/api';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const STATUS_COLOR = { pending: 'oklch(0.8 0.15 95)', active: 'oklch(0.62 0.21 25)', completed: 'oklch(0.72 0.15 145)', declined: '#5c6178' };
+const RISK_COLORS = { LOW: 'oklch(0.72 0.15 145)', MODERATE: 'oklch(0.8 0.15 95)', HIGH: 'oklch(0.7 0.17 55)', CRITICAL: 'oklch(0.62 0.21 25)' };
 
 export default function InterventionCommand() {
   const [interventions, setInterventions] = useState([]);
   const [sosOpen, setSosOpen] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [queue, setQueue] = useState([]);
+  const [queueLoading, setQueueLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([api.get('/api/interventions'), api.get('/api/sos')])
       .then(([iv, sos]) => { setInterventions(iv); setSosOpen(sos.filter((s) => s.status !== 'RESOLVED').length); })
       .catch(() => {})
       .finally(() => setLoading(false));
+    api.get('/api/cases/priority-queue?limit=15').then(setQueue).catch(() => {}).finally(() => setQueueLoading(false));
   }, []);
 
   const counts = {
@@ -38,6 +42,38 @@ export default function InterventionCommand() {
             <div style={{ font: '700 26px Sora,sans-serif', color: ck.color }}>{ck.value}</div>
           </div>
         ))}
+      </div>
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 2 }}>Priority Queue &middot; What to look at first</div>
+        <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>
+          Ranked by SVI value plus a disclosed, capped bonus for time spent unactioned (+0.5 pt/hour, capped at +20) - so a case
+          nobody has touched surfaces over time instead of sitting buried behind newer, higher-severity ones indefinitely.
+          Excludes closed cases.
+        </div>
+        {queueLoading && <div style={{ color: '#7d8399', fontSize: 13 }}>Loading…</div>}
+        {!queueLoading && queue.length === 0 && <div style={{ color: '#5c6178', fontSize: 12.5 }}>No open cases to prioritize.</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {queue.map((q) => (
+            <div key={q.caseId} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+              <div style={{ width: 24, textAlign: 'center', font: '700 13px Sora,sans-serif', color: '#5c6178' }}>#{q.rank}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{q.caseNumber}</span>
+                  <span style={{ color: '#5c6178' }}>&middot;</span>
+                  <span>{q.victim.displayCode}</span>
+                  <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: RISK_COLORS[q.riskLevel].replace(')', ' / 0.15)'), color: RISK_COLORS[q.riskLevel] }}>{q.riskLevel}</span>
+                </div>
+                <div style={{ fontSize: 11, color: '#5c6178', marginTop: 2 }}>
+                  {q.incidentType} &middot; {q.victim.district}, {q.victim.state} &middot; waiting {q.priority.hoursWaiting}h &middot; {q.assignedTo.length ? q.assignedTo.map((a) => a.name).join(', ') : 'Unassigned'}
+                </div>
+              </div>
+              <div title={`SVI ${q.priority.sviValue} + aging bonus ${q.priority.agingBonus} (waited ${q.priority.hoursWaiting}h)`} style={{ textAlign: 'right', flex: 'none' }}>
+                <div style={{ font: '700 16px Sora,sans-serif' }}>{q.priority.priorityScore}</div>
+                <div style={{ fontSize: 9.5, color: '#5c6178' }}>{q.priority.sviValue} SVI +{q.priority.agingBonus}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
       <div style={{ ...card, marginBottom: 16 }}>
         <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 4 }}>Escalation Workflow</div>

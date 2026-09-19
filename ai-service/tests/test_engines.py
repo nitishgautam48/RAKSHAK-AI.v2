@@ -92,6 +92,35 @@ def test_nlp_detects_caste_targeting_in_marathi():
     assert result.threat_score > 0
 
 
+def test_nlp_native_review_flagged_when_unreviewed_language_term_matches():
+    # Tamil term with no English/Hindi equivalent in this narrative.
+    result = nlp_engine.analyze("நான் மிகவும் பயந்தேன்.")
+    assert result.native_review_recommended is True
+    assert len(result.native_review_matched_terms) > 0
+
+
+def test_nlp_native_review_not_flagged_for_english_only_narrative():
+    result = nlp_engine.analyze("They threatened to kill us and burn our house.")
+    assert result.native_review_recommended is False
+    assert result.native_review_matched_terms == []
+
+
+def test_nlp_native_review_not_flagged_for_hindi_only_narrative():
+    # Hindi is NOT one of the six unreviewed languages - it predates task
+    # #118 and has had far more testing/scrutiny throughout this project.
+    result = nlp_engine.analyze("वे हमें जान से मारने की धमकी दे रहे हैं")
+    assert result.native_review_recommended is False
+
+
+def test_nlp_native_review_flagged_from_suicidal_pattern_alone():
+    # Even with zero category-keyword matches, an unreviewed-language
+    # suicidal-ideation pattern alone must still raise the flag - this is
+    # the highest-stakes case for a false positive/negative.
+    result = nlp_engine.analyze("ಆತ್ಮಹತ್ಯೆ")
+    assert result.suicidal_ideation_flag is True
+    assert result.native_review_recommended is True
+
+
 def test_nlp_word_count_covers_non_devanagari_indian_scripts():
     # WORD_RE previously only recognized Latin + Devanagari codepoints as
     # "words" - Tamil/Telugu/Kannada/Bengali/Odia text would have scored a

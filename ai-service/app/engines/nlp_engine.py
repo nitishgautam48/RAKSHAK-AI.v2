@@ -118,6 +118,46 @@ LEXICON: dict[str, list[str]] = {
     ],
 }
 
+# Every term added by task #118 for the six languages the module docstring's
+# CAVEAT applies to (Bengali, Marathi, Telugu, Tamil, Kannada, Odia) - used
+# to flag when a score actually depended on unreviewed vocabulary, so staff
+# know to treat that specific read with more caution than an English/Hindi
+# one. Covers the two signals this directly and visibly drives (matched
+# category keywords, suicidal-ideation phrases) - intensifiers/negations/
+# authority-context/first-person markers are secondary modifiers not
+# covered here, to keep this list's maintenance burden bounded. IMPORTANT:
+# any future non-English/Hindi lexicon addition must be added here too, or
+# it will silently score without ever surfacing the review flag. A term
+# identical to an existing Hindi entry (e.g. "आत्महत्या", shared with
+# Marathi) is deliberately left out - it's indistinguishable from the
+# already-established Hindi term at the string level.
+UNREVIEWED_LANGUAGE_TERMS: frozenset[str] = frozenset({
+    # threat
+    "जीवे मारण्याची धमकी", "मारून टाकू", "হুমকি", "মেরে ফেলব",
+    "బెదిరింపు", "చంపేస్తాను", "కొడతాను", "மிரட்டல்", "கொல்வோம்",
+    "ಬೆದರಿಕೆ", "ಕೊಲ್ಲುತ್ತೇವೆ", "ଧମକ", "ମାରି ଦେବୁ",
+    # fear
+    "भीती", "घाबरलो", "ভয়", "ভয় পেয়েছি", "భయం", "భయపడ్డాను",
+    "பயம்", "பயந்தேன்", "ಭಯ", "ಹೆದರಿದೆ", "ଭୟ", "ଡରିଗଲି",
+    # hopelessness
+    "आशा नाही", "আশা নেই", "ఆశ లేదు", "நம்பிக்கை இல்லை", "ಭರವಸೆ ಇಲ್ಲ", "ଆଶା ନାହିଁ",
+    # isolation
+    "एकटा", "एकटी", "একা", "বয়কট", "ఒంటరిగా", "వెలివేత",
+    "தனியாக", "புறக்கணிப்பு", "ಒಂಟಿ", "ಬಹಿಷ್ಕಾರ", "ଏକୁଟିଆ", "ବହିଷ୍କାର",
+    # vulnerability
+    "मुले", "वृद्ध", "শিশু", "বৃদ্ধ", "పిల్లలు", "వృద్ధులు",
+    "குழந்தைகள்", "முதியவர்", "ಮಕ್ಕಳು", "ವೃದ್ಧ", "ପିଲାମାନେ", "ବୃଦ୍ଧ",
+    # physical_harm
+    "मारहाण", "जखम", "মারধর", "আঘাত", "కొట్టారు", "గాయం",
+    "அடித்தார்கள்", "காயம்", "ಹೊಡೆದರು", "ಗಾಯ", "ମାଡ଼", "ଆଘାତ",
+    # caste_targeting
+    "जात", "दलित", "জাতি", "দলিত", "కులం", "దళిత్",
+    "சாதி", "தலித்", "ಜಾತಿ", "ದಲಿತ", "ଜାତି", "ଦଳିତ",
+    # suicidal-ideation patterns (see SUICIDAL_PATTERNS below)
+    "मरावेसे वाटते", "আত্মহত্যা", "చావాలని అనిపిస్తోంది",
+    "செத்துவிட வேண்டும்", "ಆತ್ಮಹತ್ಯೆ", "ଆତ୍ମହତ୍ୟା",
+})
+
 INTENSIFIERS = {
     "very", "extremely", "repeatedly", "every night", "every day", "again and again", "baar baar",
     "खूप",  # Marathi (very)
@@ -208,6 +248,14 @@ class NlpIndicators:
     word_count: int = 0
     authority_context_detected: bool = False
     victim_testimony_detected: bool = False
+    # True when the score actually depended on a matched term from one of
+    # the six languages the module docstring's CAVEAT applies to - those
+    # entries haven't been reviewed by a native/fluent speaker. This is a
+    # transparency flag for staff, not a confidence adjustment: it never
+    # changes any score, only whether this particular read should get
+    # extra scrutiny before being relied on.
+    native_review_recommended: bool = False
+    native_review_matched_terms: list[str] = field(default_factory=list)
 
 
 SUICIDAL_PATTERNS = [
@@ -309,8 +357,19 @@ def analyze(text: str) -> NlpIndicators:
         1,
     )
 
-    suicidal_flag = any(p in text_lower for p in SUICIDAL_PATTERNS)
+    matched_suicidal_patterns = [p for p in SUICIDAL_PATTERNS if p in text_lower]
+    suicidal_flag = bool(matched_suicidal_patterns)
     matched_keywords = sorted({t for h in hits for t in h.matched_terms})
+
+    # Transparency flag, not a confidence adjustment (see NlpIndicators'
+    # docstring comment) - covers both the category keywords that drove the
+    # scores above and any suicidal-ideation pattern that fired, since a
+    # false positive/negative there is the highest-stakes failure mode.
+    native_review_matched_terms = sorted(
+        UNREVIEWED_LANGUAGE_TERMS.intersection(matched_keywords)
+        | UNREVIEWED_LANGUAGE_TERMS.intersection(matched_suicidal_patterns)
+    )
+    native_review_recommended = bool(native_review_matched_terms)
 
     # Both signals below only count alongside real matched-category evidence
     # (has_category_evidence) - an authority word or a stray pronoun in
@@ -342,4 +401,6 @@ def analyze(text: str) -> NlpIndicators:
         word_count=word_count,
         authority_context_detected=authority_context_detected,
         victim_testimony_detected=victim_testimony_detected,
+        native_review_recommended=native_review_recommended,
+        native_review_matched_terms=native_review_matched_terms,
     )

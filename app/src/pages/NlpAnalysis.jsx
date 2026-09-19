@@ -55,8 +55,28 @@ export default function NlpAnalysis() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 10px' }}>
                   {nlp.matchedKeywords.length === 0 && <div style={{ color: '#5c6178', fontSize: 12.5 }}>No indicator keywords matched in this narrative.</div>}
                   {nlp.matchedKeywords.map((kw) => (
-                    <div key={kw} style={{ padding: '4px 12px', borderRadius: 20, background: 'rgba(255,255,255,.06)', fontSize: 12.5, color: '#eef0f6' }}>{kw}</div>
+                    <div
+                      key={kw}
+                      style={{
+                        padding: '4px 12px', borderRadius: 20, fontSize: 12.5,
+                        background: nlp.nativeReviewMatchedTerms?.includes(kw) ? 'oklch(0.75 0.15 55 / 0.15)' : 'rgba(255,255,255,.06)',
+                        color: nlp.nativeReviewMatchedTerms?.includes(kw) ? 'oklch(0.78 0.15 55)' : '#eef0f6',
+                      }}
+                    >
+                      {kw}
+                    </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {nlp?.nativeReviewRecommended && (
+              <div style={{ background: 'oklch(0.75 0.15 55 / 0.1)', border: '1px solid oklch(0.75 0.15 55 / 0.35)', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(0.78 0.15 55)', marginBottom: 4 }}>⚠ Unreviewed-Language Terms Matched</div>
+                <div style={{ fontSize: 12.5, color: '#eef0f6' }}>
+                  This score depended on lexicon terms ({nlp.nativeReviewMatchedTerms.join(', ')}) from a language that hasn't been
+                  reviewed by a native or fluent speaker yet. Treat this read with extra scrutiny pending that review - it isn't
+                  suppressed or discounted, just flagged.
                 </div>
               </div>
             )}

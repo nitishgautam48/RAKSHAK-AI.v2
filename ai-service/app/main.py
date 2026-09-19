@@ -199,6 +199,8 @@ def assess(body: AssessRequest) -> dict:
             "wordCount": nlp_result.word_count,
             "authorityContextDetected": nlp_result.authority_context_detected,
             "victimTestimonyDetected": nlp_result.victim_testimony_detected,
+            "nativeReviewRecommended": nlp_result.native_review_recommended,
+            "nativeReviewMatchedTerms": nlp_result.native_review_matched_terms,
             "llmUnderstanding": (
                 {
                     "model": llm_result.model,

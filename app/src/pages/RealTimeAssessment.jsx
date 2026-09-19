@@ -165,7 +165,23 @@ export default function RealTimeAssessment() {
               ))}
               {result.nlp.matchedKeywords.length > 0 && (
                 <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {result.nlp.matchedKeywords.map((k) => <span key={k} style={{ padding: '3px 8px', borderRadius: 12, background: 'rgba(255,255,255,.06)', fontSize: 10.5 }}>{k}</span>)}
+                  {result.nlp.matchedKeywords.map((k) => (
+                    <span
+                      key={k}
+                      style={{
+                        padding: '3px 8px', borderRadius: 12, fontSize: 10.5,
+                        background: result.nlp.nativeReviewMatchedTerms?.includes(k) ? 'oklch(0.75 0.15 55 / 0.15)' : 'rgba(255,255,255,.06)',
+                        color: result.nlp.nativeReviewMatchedTerms?.includes(k) ? 'oklch(0.78 0.15 55)' : undefined,
+                      }}
+                    >
+                      {k}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {result.nlp.nativeReviewRecommended && (
+                <div style={{ marginTop: 10, fontSize: 10.5, color: 'oklch(0.78 0.15 55)' }}>
+                  ⚠ Depends on unreviewed-language lexicon terms - treat with extra scrutiny.
                 </div>
               )}
               {(result.nlp.authorityContextDetected || result.nlp.victimTestimonyDetected) && (

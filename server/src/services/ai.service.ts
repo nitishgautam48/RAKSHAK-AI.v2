@@ -44,6 +44,8 @@ export interface AssessResponse {
     wordCount: number;
     authorityContextDetected: boolean;
     victimTestimonyDetected: boolean;
+    nativeReviewRecommended: boolean;
+    nativeReviewMatchedTerms: string[];
     llmUnderstanding: { model: string; rationale: string; scores: Record<string, number>; injectionSuspected: boolean } | null;
   };
   emotion: {

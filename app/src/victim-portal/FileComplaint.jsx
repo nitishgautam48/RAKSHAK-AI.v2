@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
+import { blobToWavBase64 } from '../lib/audioToWav';
 
 const optionBtn = { display: 'flex', alignItems: 'center', gap: 12, padding: 16, borderRadius: 14, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.04)', color: '#eef0f6', font: "600 14px 'IBM Plex Sans',sans-serif", cursor: 'pointer', textAlign: 'left' };
 const INCIDENT_TYPES = [
@@ -8,23 +9,81 @@ const INCIDENT_TYPES = [
   'Sexual harassment or assault', 'Discrimination in public services', 'Other',
 ];
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.slice(reader.result.indexOf(',') + 1));
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+function formatSeconds(s) {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
 export default function FileComplaint() {
   const [incidentType, setIncidentType] = useState(INCIDENT_TYPES[0]);
   const [narrative, setNarrative] = useState('');
-  const [audioFile, setAudioFile] = useState(null);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [micError, setMicError] = useState('');
   const [docFile, setDocFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
+
+  useEffect(() => () => {
+    // Cleanup on unmount: release the mic and the blob: URL, don't leave
+    // either hanging around if the survivor navigates away mid-recording.
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const startRecording = async () => {
+    setMicError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+        stream.getTracks().forEach((t) => t.stop());
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordSeconds(0);
+      timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch {
+      setMicError('Could not access your microphone. Check your browser permissions, or upload an audio file instead below.');
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  const discardRecording = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioBlob(null);
+    setAudioUrl(null);
+  };
+
+  const handleAudioUpload = (file) => {
+    if (!file) return;
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioBlob(file);
+    setAudioUrl(URL.createObjectURL(file));
+  };
 
   const submit = async () => {
     if (!narrative.trim() || submitting) return;
@@ -42,8 +101,11 @@ export default function FileComplaint() {
       // previously filed but never analyzed at all, silently leaving staff
       // with no risk signal on the majority of intakes. Best-effort: the
       // complaint is already filed either way, and staff can re-run this
-      // later from Real-Time Assessment if it fails.
-      const audioBase64 = audioFile ? await fileToBase64(audioFile) : undefined;
+      // later from Real-Time Assessment if it fails. Whether the audio came
+      // from live recording or a file upload, it's normalized to WAV first
+      // (see audioToWav.js) - the backend's decoder doesn't support the
+      // webm/opus browsers record in, or phone voice-memo formats like m4a.
+      const audioBase64 = audioBlob ? await blobToWavBase64(audioBlob).catch(() => undefined) : undefined;
       await api.post('/api/assessments', {
         victimId: complaint.victimId,
         complaintId: complaint.id,
@@ -63,7 +125,7 @@ export default function FileComplaint() {
 
       setResult(complaint);
       setNarrative('');
-      setAudioFile(null);
+      discardRecording();
       setDocFile(null);
     } catch (err) {
       setError(err.body?.message || 'Could not submit your complaint. Please try again.');
@@ -101,11 +163,46 @@ export default function FileComplaint() {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <label style={{ ...optionBtn, cursor: 'pointer' }}>
-          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'oklch(0.65 0.14 200 / 0.25)', flex: 'none' }} />
-          {audioFile ? `Audio attached: ${audioFile.name}` : 'Attach an Audio Recording'}
-          <input type="file" accept="audio/*" hidden onChange={(e) => setAudioFile(e.target.files?.[0] ?? null)} />
+        <div style={{ fontSize: 13, color: '#8b91a3' }}>Prefer to speak instead of type? You can record a voice message.</div>
+
+        {!audioUrl && !recording && (
+          <div onClick={startRecording} style={{ ...optionBtn, cursor: 'pointer' }}>
+            <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'oklch(0.65 0.14 200 / 0.25)', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>&#127908;</div>
+            Record a Voice Message
+          </div>
+        )}
+
+        {recording && (
+          <div style={{ ...optionBtn, cursor: 'default', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'oklch(0.62 0.21 25)' }} className="tsa-pulse-dot" />
+              Recording… {formatSeconds(recordSeconds)}
+            </div>
+            <button onClick={stopRecording} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'oklch(0.62 0.21 25)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Stop</button>
+          </div>
+        )}
+
+        {audioUrl && !recording && (
+          <div style={{ ...optionBtn, cursor: 'default', flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'oklch(0.72 0.15 145 / 0.25)', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>&#9989;</div>
+              Voice message ready
+            </div>
+            <audio controls src={audioUrl} style={{ width: '100%', height: 36 }} />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={discardRecording} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid rgba(255,255,255,.15)', background: 'transparent', color: '#c4c8d4', fontSize: 12.5, cursor: 'pointer' }}>Remove</button>
+              <button onClick={startRecording} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid rgba(255,255,255,.15)', background: 'transparent', color: '#c4c8d4', fontSize: 12.5, cursor: 'pointer' }}>Re-record</button>
+            </div>
+          </div>
+        )}
+
+        {micError && <div style={{ fontSize: 12, color: 'oklch(0.75 0.18 25)' }}>{micError}</div>}
+
+        <label style={{ fontSize: 12.5, color: '#8b91a3', textDecoration: 'underline', cursor: 'pointer', alignSelf: 'flex-start' }}>
+          or upload an audio file instead
+          <input type="file" accept="audio/*" hidden onChange={(e) => handleAudioUpload(e.target.files?.[0] ?? null)} />
         </label>
+
         <label style={{ ...optionBtn, cursor: 'pointer' }}>
           <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'oklch(0.72 0.15 145 / 0.25)', flex: 'none' }} />
           {docFile ? `File attached: ${docFile.name}` : 'Upload a Document or Photo'}

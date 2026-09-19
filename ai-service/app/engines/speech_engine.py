@@ -3,13 +3,21 @@
 Why this defaults to a human-entered transcript rather than calling Whisper:
 this sandbox's outbound egress policy denies every model-weight host tried
 during setup (huggingface.co, openaipublic.azureedge.net, api.openai.com,
-api.assemblyai.com all returned 403 org-policy-denied). There is no route to
-download Whisper/IndicWhisper weights or reach a hosted ASR API from here.
+api.assemblyai.com all returned 403 org-policy-denied), so real Whisper
+weights cannot be downloaded or exercised end-to-end from inside this
+sandbox. `faster-whisper` itself is a normal PyPI package with no such
+restriction and is installed as a real dependency (see pyproject.toml).
 
-`LocalWhisperProvider` below is a real, working implementation - it runs the
-moment `faster-whisper` is installed and a model directory is pointed at via
-WHISPER_MODEL_PATH (e.g. by mounting pre-downloaded weights in a deployment
-that *does* have model-host access). Until then, `OperatorTranscriptProvider`
+`LocalWhisperProvider` below is a real, working implementation. It activates
+the moment STT_PROVIDER=whisper_local and WHISPER_MODEL_PATH are set in the
+environment - WHISPER_MODEL_PATH can be a model size faster-whisper knows how
+to fetch itself ("tiny", "base", "small", "medium", "large-v3" - larger means
+slower but more accurate, "small" is a reasonable balance on CPU), a
+Hugging Face repo id, or a local directory of pre-downloaded weights. On a
+machine with normal internet access (e.g. your own local dev setup, or a
+deployment that isn't behind this sandbox's egress policy), the size-name
+form downloads and caches the weights automatically on first use - no manual
+download step needed. Until this is configured, `OperatorTranscriptProvider`
 is what's active, which matches how real 14566-style helplines already
 operate: an operator or the survivor supplies the transcript directly, and
 every downstream engine (NLP/SVI/emotion) analyzes that real text.

@@ -65,22 +65,52 @@ def nlp_analysis(body: NlpAnalyzeRequest) -> dict:
 def assess(body: AssessRequest) -> dict:
     t0 = time.time()
 
-    transcript = speech_engine.get_provider(settings.stt_provider).transcribe(
-        audio_bytes=None, provided_transcript=body.narrative, language_hint=body.language_hint,
-    )
-
-    voice_result = None
+    audio_bytes: bytes | None = None
     if body.audio_base64:
         try:
             audio_bytes = base64.b64decode(body.audio_base64)
-            word_count = len(body.narrative.split()) if body.narrative else None
-            voice_result = voice_engine.analyze(audio_bytes, transcript_word_count=word_count)
-        except Exception as e:  # noqa: BLE001 - degrade gracefully, voice analysis is optional
-            voice_result = None
-            transcript_note = str(e)
-            _ = transcript_note
+        except Exception:  # noqa: BLE001 - corrupt/invalid base64 must not break the whole assessment
+            audio_bytes = None
 
-    nlp_result = nlp_engine.analyze(body.narrative)
+    # A real ASR pass only makes sense when there's actual audio to
+    # transcribe and a real provider is configured. No audio, an
+    # unconfigured provider (the "operator_transcript" default), or any
+    # transcription failure (missing model weights, corrupt audio) all fall
+    # back to whatever text was already typed by the operator or the victim
+    # - see speech_engine.py for why that's the safe default rather than
+    # pretending to transcribe. This used to unconditionally pass
+    # audio_bytes=None here, so audio was never actually transcribed even
+    # when a real STT_PROVIDER was configured - a real bug found while
+    # wiring in whisper_local.
+    transcript = None
+    if audio_bytes and settings.stt_provider != "operator_transcript":
+        try:
+            transcript = speech_engine.get_provider(settings.stt_provider).transcribe(
+                audio_bytes=audio_bytes, provided_transcript=body.narrative, language_hint=body.language_hint,
+            )
+        except Exception:  # noqa: BLE001 - a real ASR failure must degrade, not 500 the whole assessment
+            transcript = None
+    if transcript is None:
+        transcript = speech_engine.get_provider("operator_transcript").transcribe(
+            audio_bytes=None, provided_transcript=body.narrative, language_hint=body.language_hint,
+        )
+
+    # Once real audio has actually been transcribed, every downstream engine
+    # analyzes the real spoken words, not the typed narrative - for a
+    # voice-only complaint the typed narrative is just the placeholder text
+    # (see FileComplaint.jsx's VOICE_ONLY_PLACEHOLDER) and carries no signal
+    # of its own.
+    analysis_text = transcript.transcript if transcript.source == "whisper_local" and transcript.transcript.strip() else body.narrative
+
+    voice_result = None
+    if audio_bytes:
+        try:
+            word_count = len(analysis_text.split()) if analysis_text else None
+            voice_result = voice_engine.analyze(audio_bytes, transcript_word_count=word_count)
+        except Exception:  # noqa: BLE001 - degrade gracefully, voice analysis is optional
+            voice_result = None
+
+    nlp_result = nlp_engine.analyze(analysis_text)
 
     # Optional real-language-understanding pass (see llm_engine.py's honesty
     # notes) - catches narratives that describe something severe without
@@ -90,7 +120,7 @@ def assess(body: AssessRequest) -> dict:
     # "can only raise, never lower" rule as every other additive signal in
     # this pipeline - a wrong or unavailable LLM read can never suppress a
     # real keyword hit.
-    llm_result = llm_engine.analyze(body.narrative)
+    llm_result = llm_engine.analyze(analysis_text)
     if llm_result.available:
         for category in llm_engine.CATEGORIES:
             field_name = f"{category}_score"

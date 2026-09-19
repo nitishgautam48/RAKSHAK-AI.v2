@@ -20,9 +20,10 @@ class Settings(BaseSettings):
     # architecture decision recorded in server/README.md.
     service_key: str = "dev-insecure-service-key-change-me"
 
-    # Speech-to-text: see engines/speech_engine.py for why this defaults to
-    # "operator_transcript" rather than a downloaded ASR model in this
-    # environment (model-weight hosts are blocked by sandbox egress policy).
+    # Speech-to-text provider: "operator_transcript" (default, no ASR) or
+    # "whisper_local" (real faster-whisper transcription - also needs
+    # WHISPER_MODEL_PATH set; see engines/speech_engine.py for what that
+    # accepts and why this isn't the default in every environment).
     stt_provider: str = "operator_transcript"
 
     # Optional real-language-understanding signal (see engines/llm_engine.py)

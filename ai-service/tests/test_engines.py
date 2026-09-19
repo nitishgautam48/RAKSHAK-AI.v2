@@ -33,6 +33,27 @@ def test_nlp_suicidal_ideation_flag():
     assert result.suicidal_ideation_flag is True
 
 
+def test_nlp_suicidal_ideation_flag_catches_real_reported_wording_variance():
+    # Real bug found via live testing: "end my life" (the literal phrase in
+    # SUICIDAL_PATTERNS) did not match "end UP my life" - one extra word
+    # broke a plain substring check entirely, and the sentence scored
+    # completely clean (suicidal_ideation_flag=False, all category scores
+    # 0). This must now be caught by the structural end...life pattern.
+    result = nlp_engine.analyze("nobody is there for me i think that i should end up my life right now")
+    assert result.suicidal_ideation_flag is True
+    assert result.isolation_score > 0  # "nobody" - also missing before this fix
+
+
+def test_nlp_suicidal_ideation_end_life_pattern_does_not_require_exact_phrase():
+    variants = [
+        "i want to end my own life",
+        "i am going to end this life",
+        "he wants to end his life",
+    ]
+    for text in variants:
+        assert nlp_engine.analyze(text).suicidal_ideation_flag is True, f"failed for: {text}"
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should

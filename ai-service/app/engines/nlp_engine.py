@@ -78,6 +78,11 @@ LEXICON: dict[str, list[str]] = {
         "alone", "no one helps", "no one will", "no one to", "will speak to us", "excluded", "boycott",
         "abandoned", "isolated", "shunned", "no way out", "no support", "on our own",
         "denied entry", "not allowed to enter", "humiliat", "koi baat nahi",
+        # "nobody" is an extremely common real-world phrasing this lexicon
+        # missed entirely (only had "no one ___" variants) until a real
+        # test narrative ("nobody is there for me...") scored zero on
+        # isolation because of this exact gap.
+        "nobody", "no one cares", "nobody cares", "nobody helps", "no one to turn to",
         "akela", "अकेला", "बहिष्कार",  # Hindi
         "एकटा", "एकटी", "बहिष्कार",  # Marathi
         "একা", "বয়কট",  # Bengali
@@ -260,6 +265,15 @@ class NlpIndicators:
 
 SUICIDAL_PATTERNS = [
     "end my life", "want to die", "kill myself", "no reason to live",
+    # Added after a real test narrative ("...i should end up my life right
+    # now") scored zero: plain substring matching against "end my life"
+    # doesn't catch "end UP my life" - one extra word breaks it entirely.
+    # These are additional literal phrasings, not a fix to the matching
+    # mechanism itself (see _SUICIDAL_END_LIFE_RE below for that).
+    "end it all", "ending my life", "ending it all", "wish i was dead",
+    "wish i were dead", "better off dead", "not worth living",
+    "no point in living", "take my own life", "take my life",
+    "hurt myself", "harm myself",
     "khudkushi", "आत्महत्या",  # Hindi
     "आत्महत्या", "मरावेसे वाटते",  # Marathi (आत्महत्या shared with Hindi)
     "আত্মহত্যা",  # Bengali
@@ -268,6 +282,20 @@ SUICIDAL_PATTERNS = [
     "ಆತ್ಮಹತ್ಯೆ",  # Kannada
     "ଆତ୍ମହତ୍ୟା",  # Odia
 ]
+
+# A literal phrase list can never keep up with real phrasing variance -
+# "end up my life", "put an end to my own life", "end our life together"
+# all express the same thing but none contain the exact substring
+# "end my life". This structural pattern catches "end ... life" with the
+# word "end" and the word "life" separated by up to a few words, rather
+# than requiring an exact phrase. Deliberately generous (this only ever
+# adds a review flag - see native_review_recommended's docstring for the
+# same "flag, don't suppress" philosophy - never suppresses or lowers
+# anything), at the cost of occasionally matching non-suicidal uses of
+# "end" and "life" in the same sentence (e.g. "this is the end of my life
+# as a student") - an acceptable false-positive rate for a human-review
+# trigger, not an auto-action.
+_SUICIDAL_END_LIFE_RE = re.compile(r"\bend\b(?:\s+\w+){0,4}\s+life\b")
 
 
 def _normalize(text: str) -> str:
@@ -358,7 +386,7 @@ def analyze(text: str) -> NlpIndicators:
     )
 
     matched_suicidal_patterns = [p for p in SUICIDAL_PATTERNS if p in text_lower]
-    suicidal_flag = bool(matched_suicidal_patterns)
+    suicidal_flag = bool(matched_suicidal_patterns) or bool(_SUICIDAL_END_LIFE_RE.search(text_lower))
     matched_keywords = sorted({t for h in hits for t in h.matched_terms})
 
     # Transparency flag, not a confidence adjustment (see NlpIndicators'

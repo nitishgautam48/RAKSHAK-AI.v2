@@ -163,7 +163,12 @@ def assess(body: AssessRequest) -> dict:
             "authorityContextDetected": nlp_result.authority_context_detected,
             "victimTestimonyDetected": nlp_result.victim_testimony_detected,
             "llmUnderstanding": (
-                {"model": llm_result.model, "rationale": llm_result.rationale, "scores": llm_result.scores}
+                {
+                    "model": llm_result.model,
+                    "rationale": llm_result.rationale,
+                    "scores": llm_result.scores,
+                    "injectionSuspected": llm_result.injection_suspected,
+                }
                 if llm_result.available
                 else None
             ),

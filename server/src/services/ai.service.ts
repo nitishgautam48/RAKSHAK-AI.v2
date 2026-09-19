@@ -39,7 +39,7 @@ export interface AssessResponse {
     wordCount: number;
     authorityContextDetected: boolean;
     victimTestimonyDetected: boolean;
-    llmUnderstanding: { model: string; rationale: string; scores: Record<string, number> } | null;
+    llmUnderstanding: { model: string; rationale: string; scores: Record<string, number>; injectionSuspected: boolean } | null;
   };
   emotion: {
     fear: number; anxiety: number; distress: number; sadness: number; anger: number; hope: number; neutral: number;

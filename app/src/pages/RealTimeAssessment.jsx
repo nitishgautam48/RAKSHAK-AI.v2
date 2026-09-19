@@ -179,8 +179,15 @@ export default function RealTimeAssessment() {
                 </div>
               )}
               {result.nlp.llmUnderstanding && (
-                <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: 'oklch(0.65 0.14 200 / 0.08)', border: '1px solid oklch(0.65 0.14 200 / 0.25)' }}>
-                  <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.13 200)', fontWeight: 600, marginBottom: 4 }}>LLM Narrative Understanding ({result.nlp.llmUnderstanding.model})</div>
+                <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: result.nlp.llmUnderstanding.injectionSuspected ? 'oklch(0.7 0.17 55 / 0.1)' : 'oklch(0.65 0.14 200 / 0.08)', border: `1px solid ${result.nlp.llmUnderstanding.injectionSuspected ? 'oklch(0.7 0.17 55 / 0.35)' : 'oklch(0.65 0.14 200 / 0.25)'}` }}>
+                  <div style={{ fontSize: 10.5, color: result.nlp.llmUnderstanding.injectionSuspected ? 'oklch(0.78 0.15 55)' : 'oklch(0.75 0.13 200)', fontWeight: 600, marginBottom: 4 }}>
+                    LLM Narrative Understanding ({result.nlp.llmUnderstanding.model})
+                  </div>
+                  {result.nlp.llmUnderstanding.injectionSuspected && (
+                    <div style={{ fontSize: 11, color: 'oklch(0.78 0.15 55)', marginBottom: 6 }}>
+                      ⚠ This narrative may contain an attempt to manipulate the AI's scoring - treat this read with extra scrutiny, it was not automatically trusted or suppressed.
+                    </div>
+                  )}
                   <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>{result.nlp.llmUnderstanding.rationale}</div>
                 </div>
               )}

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.engines import (
     emotion_engine,
+    indic_semantic_engine,
     llm_engine,
     nlp_engine,
     recommendation_engine,
@@ -62,6 +63,16 @@ def register_model_versions() -> None:
             "origin": "translation",
             "enabled": settings.enable_indic_translation,
             "lexicon_covered_languages": sorted(translation_engine.LEXICON_COVERED_LANGUAGES),
+        },
+    )
+    registry.register_model_version(
+        "indic_bert_semantic",
+        indic_semantic_engine.MODEL_NAME if settings.enable_indic_bert_semantic else "disabled",
+        {
+            "origin": "embedding_similarity_experimental",
+            "enabled": settings.enable_indic_bert_semantic,
+            "eligible_languages": sorted(indic_semantic_engine.ELIGIBLE_LANGUAGES),
+            "caveat": "not fine-tuned for sentence-similarity - unvalidated signal, see module docstring",
         },
     )
 
@@ -212,6 +223,23 @@ def assess(body: AssessRequest) -> dict:
     ) and not translation_result.error.startswith("unsupported_language:"):
         degradation.log_degradation("translation", translation_result.error.split(":", 1)[0])
 
+    # Opt-in, EXPERIMENTAL native-language semantic matching (see
+    # indic_semantic_engine.py's load-bearing caveat: IndicBERT was not
+    # fine-tuned for sentence-similarity, so this signal is unproven, not
+    # just heavier). Only ever attempted for the 7 non-English lexicon
+    # languages - see ELIGIBLE_LANGUAGES. Same max()-only blend rule as
+    # every other additive signal in this pipeline.
+    indic_semantic_result = indic_semantic_engine.analyze(analysis_text, body.language_hint)
+    if indic_semantic_result.available:
+        for category in indic_semantic_engine.BLENDABLE_CATEGORIES:
+            field_name = f"{category}_score"
+            current = getattr(nlp_result, field_name)
+            setattr(nlp_result, field_name, max(current, indic_semantic_result.scores[category]))
+        if indic_semantic_result.suicidal_ideation_similarity >= 70.0:
+            nlp_result.suicidal_ideation_flag = True
+    elif indic_semantic_result.error not in (None, "empty_text", "not_eligible_language", "disabled_by_config"):
+        degradation.log_degradation("indic_semantic", indic_semantic_result.error.split(":", 1)[0])
+
     emotion_result = emotion_engine.analyze(nlp_result, voice_result)
 
     svi_inputs = svi_engine.SVIInputs(
@@ -313,6 +341,16 @@ def assess(body: AssessRequest) -> dict:
                     "translatedText": translation_result.translated_text,
                 }
                 if translation_result.available
+                else None
+            ),
+            "indicBertSemantic": (
+                {
+                    "model": indic_semantic_result.model,
+                    "scores": indic_semantic_result.scores,
+                    "suicidalIdeationSimilarity": indic_semantic_result.suicidal_ideation_similarity,
+                    "topMatches": {k: {"phrase": v[0], "similarity": v[1]} for k, v in indic_semantic_result.top_matches.items()},
+                }
+                if indic_semantic_result.available
                 else None
             ),
         },

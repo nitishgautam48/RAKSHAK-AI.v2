@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     # engine's key gate, not on-by-default like the semantic engine.
     enable_indic_translation: bool = False
 
+    # Opt-in, EXPERIMENTAL native-language semantic matching via IndicBERT
+    # (see engines/indic_semantic_engine.py) - off by default even more
+    # deliberately than the translation flag above: IndicBERT was not
+    # fine-tuned for sentence-similarity, so this signal's real usefulness
+    # is genuinely unproven (see that file's docstring caveat), not just
+    # gated on dependency weight.
+    enable_indic_bert_semantic: bool = False
+
     model_registry_path: str = str(BASE_DIR / "data" / "model_registry.json")
     dataset_registry_path: str = str(BASE_DIR / "data" / "dataset_registry.json")
     eval_results_path: str = str(BASE_DIR / "data" / "eval_results.json")

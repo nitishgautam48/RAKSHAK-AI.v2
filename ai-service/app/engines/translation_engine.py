@@ -26,9 +26,11 @@ heavier download/inference cost for a first integration). Requires
 `transformers` and `torch` - real, heavy dependencies NOT already used
 anywhere else in this service (fastembed was deliberately chosen for
 semantic_engine.py specifically to avoid a PyTorch dependency - see that
-file's docstring). This is why translation is opt-in
-(ENABLE_INDIC_TRANSLATION), unlike the semantic engine which is on by
-default: it's a genuine deployment-footprint decision, not a free add-on.
+file's docstring). Install with `uv sync --extra indic-nlp` (shared with
+indic_semantic_engine.py, which needs the same two packages). This is why
+translation is opt-in (ENABLE_INDIC_TRANSLATION), unlike the semantic
+engine which is on by default: it's a genuine deployment-footprint
+decision, not a free add-on.
 
 HONESTY NOTES:
 1. This sandbox cannot download real IndicTrans2 weights (same "no reachable

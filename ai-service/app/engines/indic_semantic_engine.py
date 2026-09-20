@@ -62,7 +62,7 @@ MODEL_NAME = "ai4bharat/indic-bert"
 # Same categories semantic_engine.py blends - kept as an independent copy
 # (not imported) so this engine's blend set can diverge later without
 # coupling to that module's internals.
-BLENDABLE_CATEGORIES = ["fear", "threat", "hopelessness", "isolation", "vulnerability", "caste_targeting", "sexual_violence", "custodial_abuse", "bonded_labor", "land_displacement", "child_marriage", "digital_harassment"]
+BLENDABLE_CATEGORIES = ["fear", "threat", "hopelessness", "isolation", "vulnerability", "caste_targeting", "sexual_violence", "custodial_abuse", "bonded_labor", "land_displacement", "child_marriage", "digital_harassment", "manual_scavenging", "public_humiliation"]
 
 SIMILARITY_FLOOR = 0.45  # unvalidated starting estimate - see module docstring's caveat
 SIMILARITY_CEILING = 0.80

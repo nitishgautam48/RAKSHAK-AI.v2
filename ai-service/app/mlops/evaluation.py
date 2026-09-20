@@ -66,6 +66,8 @@ def _svi_from_text(text: str) -> svi_engine.SVIResult:
             land_displacement=nlp.land_displacement_score,
             digital_harassment=nlp.digital_harassment_score,
             child_marriage_score=nlp.child_marriage_score,
+            manual_scavenging=nlp.manual_scavenging_score,
+            public_humiliation_score=nlp.public_humiliation_score,
         ),
     )
 

@@ -179,6 +179,33 @@ LEXICON: dict[str, list[str]] = {
         "leaked my photo", "blackmail", "doxxed", "doxxing", "fake profile", "obscene messages",
         "फर्जी फोटो", "साइबर उत्पीड़न", "अश्लील संदेश",  # Hindi
     ],
+    # manual_scavenging is chronic/structural tier (same as bonded_labor/
+    # land_displacement/digital_harassment - a weighted SVI input, not a
+    # floor): a specific, well-documented SC atrocity distinct from generic
+    # bonded_labor - forced manual handling of human excreta/waste, banned
+    # outright by the Prohibition of Employment as Manual Scavengers Act,
+    # 2013, and still coerced onto Dalit communities in practice.
+    "manual_scavenging": [
+        "manual scavenging", "manual scavenger", "forced to clean human waste", "forced to clean excreta",
+        "cleaning sewers by hand", "cleaning gutters by hand", "forced into the sewer", "clean the toilets by hand",
+        "मैला ढोना", "सिर पर मैला", "हाथ से मैला",  # Hindi
+    ],
+    # public_humiliation is immediate-emergency tier (same as sexual_violence/
+    # custodial_abuse/child_marriage - joins the SVI safety floor below): a
+    # specific, recurring form of caste atrocity under Section 3(1) of the
+    # SC/ST (Prevention of Atrocities) Act - parading a victim naked,
+    # garlanding with footwear, forced consumption of human excreta/urine, or
+    # public tonsuring/face-blackening. This is deliberate public degradation
+    # designed to humiliate on the basis of caste, not a lesser harm than the
+    # other severe-tier categories, and deserves the same hard floor rather
+    # than being left to a diluted composite.
+    "public_humiliation": [
+        "paraded naked", "parading naked", "paraded him naked", "paraded her naked",
+        "garlanded with footwear", "garlanded with shoes", "garlanded with slippers",
+        "forced to eat human excreta", "forced to eat excreta", "forced to drink urine",
+        "tonsured his head", "tonsured her head", "blackened his face", "blackened her face",
+        "नंगा घुमाया", "जूतों की माला", "मुंह काला किया",  # Hindi
+    ],
 }
 
 # Every term added by task #118 for the six languages the module docstring's
@@ -321,6 +348,12 @@ class NlpIndicators:
     # direct SVI weight (chronic tier, like bonded_labor/land_displacement).
     child_marriage_score: float = 0.0
     digital_harassment_score: float = 0.0
+    # manual_scavenging: chronic tier, direct SVI weight (like bonded_labor/
+    # land_displacement/digital_harassment). public_humiliation: immediate-
+    # emergency tier, joins the SVI safety floor (like sexual_violence/
+    # custodial_abuse/child_marriage).
+    manual_scavenging_score: float = 0.0
+    public_humiliation_score: float = 0.0
     category_hits: list[CategoryHit] = field(default_factory=list)
     matched_keywords: list[str] = field(default_factory=list)
     suicidal_ideation_flag: bool = False
@@ -438,6 +471,24 @@ _DIGITAL_HARASSMENT_POSTED_RE = re.compile(
     r"\b(?:posted|shared|uploaded)\b(?:\s+\w+){0,4}\s+(?:photo|photos|video|videos|image|images|picture|pictures)\b(?:\s+\w+){0,10}\s+(?:without|no)\b(?:\s+\w+){0,2}\s+(?:consent|permission)\b",
 )
 
+# Generalizes "manual_scavenging" beyond the literal phrase list - "forced to
+# clean the drains with his bare hands", "made to clear human waste from the
+# gutters", etc. share a "forced/made ... to clean ... (waste/excreta/sewer/
+# gutter/drain)" structure without one fixed substring.
+_MANUAL_SCAVENGING_FORCED_RE = re.compile(
+    r"\b(?:forced|made)\b(?:\s+\w+){0,4}\s+(?:clean|clear|remove)\b(?:\s+\w+){0,6}\s+(?:waste|excreta|sewer|sewers|gutter|gutters|drain|drains|toilet|toilets)\b",
+)
+
+# Generalizes "public_humiliation" beyond the literal phrase list - "made him
+# eat human waste in front of the whole village", "forced her to drink his
+# urine while everyone watched", etc.
+_PUBLIC_HUMILIATION_FORCED_RE = re.compile(
+    r"\b(?:forced|made)\b(?:\s+\w+){0,4}\s+(?:eat|drink|consume)\b(?:\s+\w+){0,6}\s+(?:excreta|urine|waste|faeces|feces)\b",
+)
+# "paraded ... naked" - a common real phrasing not always adjacent
+# ("paraded him through the village naked").
+_PUBLIC_HUMILIATION_PARADED_RE = re.compile(r"\bparaded\b(?:\s+\w+){0,6}\s+naked\b")
+
 _STRUCTURAL_PATTERN_FLOOR = 45.0  # matches one un-diminished keyword hit (see _category_score)
 
 
@@ -518,6 +569,9 @@ def analyze(text: str) -> NlpIndicators:
     _apply_structural_pattern(by_cat["child_marriage"], _CHILD_MARRIAGE_AGE_RE, text_lower, "married ... at [age under 18]")
     _apply_structural_pattern(by_cat["child_marriage"], _CHILD_MARRIAGE_FORCED_RE, text_lower, "forced ... to marry")
     _apply_structural_pattern(by_cat["digital_harassment"], _DIGITAL_HARASSMENT_POSTED_RE, text_lower, "posted/shared ... photo ... without consent")
+    _apply_structural_pattern(by_cat["manual_scavenging"], _MANUAL_SCAVENGING_FORCED_RE, text_lower, "forced/made ... to clean ... waste/sewer")
+    _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_FORCED_RE, text_lower, "forced/made ... to eat/drink ... excreta/urine")
+    _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_PARADED_RE, text_lower, "paraded ... naked")
     intensifier_boost = 1.0 + 0.1 * sum(1 for i in INTENSIFIERS if i in text_lower)
     # Negation is scanned on the text with matched multi-word lexicon phrases
     # blanked out first - otherwise a phrase that itself contains a negation
@@ -545,14 +599,15 @@ def analyze(text: str) -> NlpIndicators:
     threat_score = round(min(100.0, scaled("threat") + 0.5 * scaled("retaliation") + 0.4 * scaled("custodial_abuse")), 1)
 
     # trauma_score's weights below deliberately do NOT sum to 1.0 anymore
-    # (0.3 + 0.25 + 0.25 + 0.2 + 0.35 + 0.3 = 1.65) - same reasoning
+    # (0.3 + 0.25 + 0.25 + 0.2 + 0.35 + 0.3 + 0.3 = 1.95) - same reasoning
     # svi_engine.py's own module docstring gives for its weights: a single
-    # severe, specific signal (sexual violence, custodial abuse) should be
-    # able to push trauma_score up substantially on its own, not be diluted
-    # into a fixed-proportion average with four unrelated dimensions. Both
-    # new weights are disclosed policy calibrations, not derived from any
-    # dataset - same caveat as every other weight in this pipeline, pending
-    # review by someone with real domain expertise.
+    # severe, specific signal (sexual violence, custodial abuse, public
+    # humiliation) should be able to push trauma_score up substantially on
+    # its own, not be diluted into a fixed-proportion average with four
+    # unrelated dimensions. Every new weight is a disclosed policy
+    # calibration, not derived from any dataset - same caveat as every other
+    # weight in this pipeline, pending review by someone with real domain
+    # expertise.
     trauma_score = round(
         min(
             100.0,
@@ -561,7 +616,8 @@ def analyze(text: str) -> NlpIndicators:
             + 0.25 * scaled("fear")
             + 0.2 * scaled("hopelessness")
             + 0.35 * scaled("sexual_violence")
-            + 0.3 * scaled("custodial_abuse"),
+            + 0.3 * scaled("custodial_abuse")
+            + 0.3 * scaled("public_humiliation"),
         ),
         1,
     )
@@ -613,6 +669,8 @@ def analyze(text: str) -> NlpIndicators:
         land_displacement_score=scaled("land_displacement"),
         child_marriage_score=scaled("child_marriage"),
         digital_harassment_score=scaled("digital_harassment"),
+        manual_scavenging_score=scaled("manual_scavenging"),
+        public_humiliation_score=scaled("public_humiliation"),
         confidence=round(confidence, 1),
         category_hits=hits,
         matched_keywords=matched_keywords,

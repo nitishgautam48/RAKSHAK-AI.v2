@@ -38,6 +38,7 @@ WEIGHTS: dict[str, float] = {
     "bonded_labor": 0.15,
     "land_displacement": 0.15,
     "digital_harassment": 0.15,
+    "manual_scavenging": 0.15,
 }
 # v1.2.0: added caste_targeting and vulnerability as real SVI inputs. Until
 # this change, the NLP engine computed both (caste-targeting language,
@@ -61,7 +62,15 @@ WEIGHTS: dict[str, float] = {
 # v1.4.0: added digital_harassment (weighted 0.15, same tier as
 # bonded_labor/land_displacement) and child_marriage (joined the safety
 # floor below, same tier as sexual_violence/custodial_abuse).
-MODEL_VERSION = "svi-weighted-v1.4.0"
+#
+# v1.5.0: added manual_scavenging (weighted 0.15, same chronic/structural
+# tier as bonded_labor/land_displacement/digital_harassment - a specific,
+# well-documented SC atrocity distinct from generic bonded labor) and
+# public_humiliation (joined the safety floor below, same immediate-
+# emergency tier as sexual_violence/custodial_abuse/child_marriage -
+# deliberate public degradation on the basis of caste, Section 3(1) of the
+# SC/ST Prevention of Atrocities Act).
+MODEL_VERSION = "svi-weighted-v1.5.0"
 
 
 @dataclass
@@ -84,6 +93,8 @@ class SVIInputs:
     land_displacement: float = 0.0
     digital_harassment: float = 0.0
     child_marriage_score: float = 0.0
+    manual_scavenging: float = 0.0
+    public_humiliation_score: float = 0.0
 
 
 @dataclass
@@ -131,6 +142,7 @@ def compute(inputs: SVIInputs) -> SVIResult:
         "bonded_labor": inputs.bonded_labor,
         "land_displacement": inputs.land_displacement,
         "digital_harassment": inputs.digital_harassment,
+        "manual_scavenging": inputs.manual_scavenging,
     }
 
     value = sum(components[k] * WEIGHTS[k] for k in WEIGHTS)
@@ -212,10 +224,19 @@ def compute(inputs: SVIInputs) -> SVIResult:
     # child_marriage joined this floor (not the diluted-weight path) for the
     # same reason as the other two: forcing a minor into marriage is grave,
     # ongoing exploitation of a child, not a one-time historical harm that a
-    # diluted composite could reasonably represent.
+    # diluted composite could reasonably represent. public_humiliation joined
+    # for the same reason again: deliberate public degradation on the basis
+    # of caste (parading naked, forced consumption of excreta, garlanding
+    # with footwear) is itself severe, specific, and disclosed - not a harm
+    # that should have to compete for weight against unrelated dimensions.
     SEVERE_ATROCITY_SCORE_THRESHOLD = 50.0
     SEVERE_ATROCITY_FLOOR = 55.0
-    severe_atrocity_scores = (inputs.sexual_violence_score, inputs.custodial_abuse_score, inputs.child_marriage_score)
+    severe_atrocity_scores = (
+        inputs.sexual_violence_score,
+        inputs.custodial_abuse_score,
+        inputs.child_marriage_score,
+        inputs.public_humiliation_score,
+    )
     if max(severe_atrocity_scores) >= SEVERE_ATROCITY_SCORE_THRESHOLD and value < SEVERE_ATROCITY_FLOOR:
         contributions.append(
             Contribution(

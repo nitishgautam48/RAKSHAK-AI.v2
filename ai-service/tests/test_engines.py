@@ -198,6 +198,48 @@ def test_nlp_digital_harassment_structural_pattern_tolerates_a_wide_word_gap():
     assert any(t.startswith("(pattern)") for t in result.matched_keywords)
 
 
+def test_nlp_manual_scavenging_keyword_detected():
+    result = nlp_engine.analyze("he was forced into manual scavenging by the village authorities")
+    assert result.manual_scavenging_score > 0
+
+
+def test_nlp_manual_scavenging_structural_pattern_does_not_require_exact_phrase():
+    # No literal "manual scavenging"/"mail dhona" here - only the structural
+    # "forced/made ... to clean ... waste/sewer" construction.
+    result = nlp_engine.analyze("they made him clean the choked drains with his bare hands every morning")
+    assert result.manual_scavenging_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_public_humiliation_keyword_detected():
+    result = nlp_engine.analyze("the villagers paraded him naked through the streets to humiliate his family")
+    assert result.public_humiliation_score > 0
+
+
+def test_nlp_public_humiliation_forced_structural_pattern_does_not_require_exact_phrase():
+    # No literal "forced to eat human excreta" here - only the structural
+    # "forced/made ... to eat/drink ... excreta/urine" construction.
+    result = nlp_engine.analyze("they made him drink their urine while the whole village watched and laughed")
+    assert result.public_humiliation_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_public_humiliation_paraded_structural_pattern_does_not_require_exact_phrase():
+    result = nlp_engine.analyze("they paraded him through the entire village naked to punish his family")
+    assert result.public_humiliation_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_public_humiliation_raises_trauma_score():
+    # public_humiliation joins sexual_violence/custodial_abuse in feeding
+    # trauma_score directly (not just diluted through threat/fear/etc.) -
+    # same reasoning: a single severe, specific signal should be able to
+    # push trauma_score up substantially on its own.
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("the villagers paraded him naked through the streets to humiliate his family")
+    assert result.trauma_score > baseline.trauma_score
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should
@@ -382,6 +424,25 @@ def test_svi_digital_harassment_affects_score_without_flooring_it():
     # HIGH on its own, unlike child_marriage above.
     baseline = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0))
     with_signal = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, digital_harassment=80))
+    assert with_signal.value > baseline.value
+    assert with_signal.band not in ("HIGH", "CRITICAL")
+
+
+def test_svi_public_humiliation_floors_the_score():
+    # public_humiliation joined the immediate-emergency-tier safety floor,
+    # same as sexual_violence/custodial_abuse/child_marriage.
+    inputs = svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, public_humiliation_score=70)
+    result = svi_engine.compute(inputs)
+    assert result.value >= 55
+    assert result.band in ("HIGH", "CRITICAL")
+
+
+def test_svi_manual_scavenging_affects_score_without_flooring_it():
+    # manual_scavenging is chronic-tier (weighted input, like bonded_labor/
+    # land_displacement/digital_harassment) - it should raise the score but
+    # NOT floor it at HIGH on its own, unlike public_humiliation above.
+    baseline = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0))
+    with_signal = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, manual_scavenging=80))
     assert with_signal.value > baseline.value
     assert with_signal.band not in ("HIGH", "CRITICAL")
 

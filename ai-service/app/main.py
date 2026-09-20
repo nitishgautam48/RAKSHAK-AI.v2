@@ -270,6 +270,7 @@ def assess(body: AssessRequest) -> dict:
         child_marriage_score=nlp_result.child_marriage_score,
         manual_scavenging=nlp_result.manual_scavenging_score,
         public_humiliation_score=nlp_result.public_humiliation_score,
+        public_access_denial=nlp_result.public_access_denial_score,
     )
     svi_result = svi_engine.compute(svi_inputs)
     drift.log_score(svi_result.value, svi_result.band)
@@ -329,6 +330,7 @@ def assess(body: AssessRequest) -> dict:
             "digitalHarassmentScore": nlp_result.digital_harassment_score,
             "manualScavengingScore": nlp_result.manual_scavenging_score,
             "publicHumiliationScore": nlp_result.public_humiliation_score,
+            "publicAccessDenialScore": nlp_result.public_access_denial_score,
             "confidence": nlp_result.confidence,
             "matchedKeywords": nlp_result.matched_keywords,
             "suicidalIdeationFlag": nlp_result.suicidal_ideation_flag,

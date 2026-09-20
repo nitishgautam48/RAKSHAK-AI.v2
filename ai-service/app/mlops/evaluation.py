@@ -68,6 +68,7 @@ def _svi_from_text(text: str) -> svi_engine.SVIResult:
             child_marriage_score=nlp.child_marriage_score,
             manual_scavenging=nlp.manual_scavenging_score,
             public_humiliation_score=nlp.public_humiliation_score,
+            public_access_denial=nlp.public_access_denial_score,
         ),
     )
 

@@ -240,6 +240,54 @@ def test_nlp_public_humiliation_raises_trauma_score():
     assert result.trauma_score > baseline.trauma_score
 
 
+def test_nlp_public_access_denial_keyword_detected():
+    result = nlp_engine.analyze("we were denied access to the well because of our caste")
+    assert result.public_access_denial_score > 0
+
+
+def test_nlp_public_access_denial_structural_pattern_does_not_require_exact_phrase():
+    # No literal "denied access"/"barred from" here - only the structural
+    # "not allowed/refused ... to draw/enter ... water/well/temple/pond"
+    # construction.
+    result = nlp_engine.analyze("we are not allowed by the dominant caste group to enter the temple")
+    assert result.public_access_denial_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_fear_lexicon_covers_stress_and_anxiety_language():
+    # "add trauma/stress/fear related words" - stress-symptom phrasing
+    # (anxiety, panic attacks, hypervigilance) is real fear signal that
+    # feeds emotion_engine's anxiety/distress outputs, not a separate
+    # dimension - see the LEXICON comment on this addition.
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("I have been having panic attacks and I feel overwhelmed and can't calm down.")
+    assert result.fear_score > baseline.fear_score
+
+
+def test_nlp_hopelessness_lexicon_covers_burnout_language():
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("I am completely burned out and I can't take it anymore.")
+    assert result.hopelessness_score > baseline.hopelessness_score
+
+
+def test_nlp_physical_harm_lexicon_covers_ptsd_symptom_language():
+    # PTSD/flashback language folds into trauma_score via physical_harm -
+    # see the LEXICON comment on this addition for why it lives there.
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("I keep having flashbacks and nightmares about it every night, it still haunts me.")
+    assert result.trauma_score > baseline.trauma_score
+
+
+def test_svi_public_access_denial_affects_score_without_flooring_it():
+    # public_access_denial is chronic-tier (weighted input, like
+    # bonded_labor/land_displacement/digital_harassment/manual_scavenging) -
+    # it should raise the score but never floor it at HIGH on its own.
+    baseline = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0))
+    with_signal = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, public_access_denial=80))
+    assert with_signal.value > baseline.value
+    assert with_signal.band not in ("HIGH", "CRITICAL")
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should

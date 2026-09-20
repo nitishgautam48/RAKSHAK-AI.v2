@@ -55,7 +55,20 @@ LEXICON: dict[str, list[str]] = {
     ],
     "fear": [
         "afraid", "scared", "terrified", "fear", "frightened", "panic", "unsafe", "dare not", "cannot sleep",
+        # Stress/anxiety-symptom vocabulary added alongside acute fear -
+        # these feed fear_score, which in turn drives emotion_engine's
+        # anxiety/distress outputs (see emotion_engine.py: anxiety = 0.5 *
+        # fear_score + ...), so this is where "stress"-adjacent narrative
+        # language should live rather than a brand-new lexicon dimension.
+        # English + Hindi only for this addition (grow-as-reviewed, same
+        # narrower scope already applied to this session's other additions),
+        # even though "fear" itself is one of the original eight-language
+        # categories.
+        "anxious", "anxiety", "panic attack", "trembling", "shaking", "can't sleep", "cannot fall asleep",
+        "restless", "heart racing", "paranoid", "hypervigilant", "jumpy", "on edge", "startled easily",
+        "overwhelmed", "can't cope", "cannot cope", "constant worry", "worried all the time", "can't calm down",
         "darr", "dari", "darta", "darte", "ghabra", "डर", "डरा", "भय",  # Hindi
+        "चिंता", "घबराहट", "बेचैनी", "तनाव में",  # Hindi (anxiety/restlessness/stress)
         "भीती", "घाबरलो",  # Marathi
         "ভয়", "ভয় পেয়েছি",  # Bengali
         "భయం", "భయపడ్డాను",  # Telugu
@@ -73,8 +86,15 @@ LEXICON: dict[str, list[str]] = {
         # normalized elsewhere in this matcher.
         "don't want to live", "dont want to live", "do not want to live",
         "no reason to live", "don't want to be alive", "dont want to be alive",
+        # Stress/burnout-adjacent despair language - distinct from acute
+        # fear (above) and from the suicidal-ideation patterns (below): this
+        # is chronic exhaustion and depletion talk, still real hopelessness
+        # signal. English + Hindi only for this addition.
+        "exhausted", "drained", "worn out", "mentally exhausted", "burned out", "burnt out",
+        "breaking down", "can't take it anymore", "cant take it anymore", "can't take this anymore",
+        "cannot take it anymore", "cannot take this anymore",
 
-        "umeed nahi", "उम्मीद नहीं", "बेबस",  # Hindi
+        "umeed nahi", "उम्मीद नहीं", "बेबस", "थक चुकी हूं", "थक चुका हूं",  # Hindi
         "आशा नाही",  # Marathi
         "আশা নেই",  # Bengali
         "ఆశ లేదు",  # Telugu
@@ -111,7 +131,16 @@ LEXICON: dict[str, list[str]] = {
     ],
     "physical_harm": [
         "hit", "struck", "beaten", "injured", "wound", "bleeding", "hospital", "unconscious", "assault",
-        "maara", "मारा", "चोट",  # Hindi
+        # Classic post-traumatic symptom language - distinct from the
+        # physical-assault evidence above, but folds into the same
+        # trauma_score composite (see analyze()'s trauma_score formula) since
+        # this dimension is what feeds trauma_score directly, not because
+        # these words describe a physical injury themselves. English + Hindi
+        # only for this addition.
+        "traumatized", "trauma", "ptsd", "post-traumatic stress", "flashbacks", "flashback",
+        "nightmares about it", "haunted by", "haunts me", "keeps replaying in my head",
+        "relive it every day", "can't forget what happened", "cant forget what happened",
+        "maara", "मारा", "चोट", "सदमा", "मानसिक आघात",  # Hindi
         "मारहाण", "जखम",  # Marathi
         "মারধর", "আঘাত",  # Bengali
         "కొట్టారు", "గాయం",  # Telugu
@@ -205,6 +234,21 @@ LEXICON: dict[str, list[str]] = {
         "forced to eat human excreta", "forced to eat excreta", "forced to drink urine",
         "tonsured his head", "tonsured her head", "blackened his face", "blackened her face",
         "नंगा घुमाया", "जूतों की माला", "मुंह काला किया",  # Hindi
+    ],
+    # public_access_denial is chronic/structural tier (same as bonded_labor/
+    # land_displacement/digital_harassment/manual_scavenging - a weighted
+    # SVI input, not a floor): denying a Dalit/Adivasi person access to a
+    # shared water source, temple, or other public place on the basis of
+    # caste is one of the most commonly cited, specifically enumerated forms
+    # of atrocity under Section 3(1) of the SC/ST (Prevention of Atrocities)
+    # Act - distinct from the generic "denied entry"/"not allowed to enter"
+    # phrasing already in the isolation category (which covers social
+    # exclusion broadly, not this specific, legally-named harm).
+    "public_access_denial": [
+        "denied access to the well", "denied access to the water", "not allowed to draw water",
+        "not allowed to fetch water", "barred from the temple", "denied entry to the temple",
+        "not allowed to enter the temple", "denied access to the pond", "not allowed to use the common well",
+        "पानी नहीं लेने दिया", "मंदिर में प्रवेश नहीं", "कुएं से पानी नहीं भरने दिया",  # Hindi
     ],
 }
 
@@ -354,6 +398,9 @@ class NlpIndicators:
     # custodial_abuse/child_marriage).
     manual_scavenging_score: float = 0.0
     public_humiliation_score: float = 0.0
+    # public_access_denial: chronic tier, direct SVI weight (like
+    # bonded_labor/land_displacement/digital_harassment/manual_scavenging).
+    public_access_denial_score: float = 0.0
     category_hits: list[CategoryHit] = field(default_factory=list)
     matched_keywords: list[str] = field(default_factory=list)
     suicidal_ideation_flag: bool = False
@@ -489,6 +536,16 @@ _PUBLIC_HUMILIATION_FORCED_RE = re.compile(
 # ("paraded him through the village naked").
 _PUBLIC_HUMILIATION_PARADED_RE = re.compile(r"\bparaded\b(?:\s+\w+){0,6}\s+naked\b")
 
+# Generalizes "public_access_denial" beyond the literal phrase list - "we
+# were not allowed to take water from the village well", "they refused to
+# let us enter the temple", etc. share a "not allowed/refused ... to
+# draw/enter/use ... water/well/temple/pond" structure without one fixed
+# substring covering all word orders.
+_PUBLIC_ACCESS_DENIAL_RE = re.compile(
+    r"\b(?:not\s+allowed|refused|forbidden|barred)\b(?:\s+\w+){0,6}\s+(?:draw|fetch|take|use|enter)\b"
+    r"(?:\s+\w+){0,4}\s+(?:water|well|temple|pond)\b",
+)
+
 _STRUCTURAL_PATTERN_FLOOR = 45.0  # matches one un-diminished keyword hit (see _category_score)
 
 
@@ -572,6 +629,7 @@ def analyze(text: str) -> NlpIndicators:
     _apply_structural_pattern(by_cat["manual_scavenging"], _MANUAL_SCAVENGING_FORCED_RE, text_lower, "forced/made ... to clean ... waste/sewer")
     _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_FORCED_RE, text_lower, "forced/made ... to eat/drink ... excreta/urine")
     _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_PARADED_RE, text_lower, "paraded ... naked")
+    _apply_structural_pattern(by_cat["public_access_denial"], _PUBLIC_ACCESS_DENIAL_RE, text_lower, "not allowed/refused ... water/well/temple/pond")
     intensifier_boost = 1.0 + 0.1 * sum(1 for i in INTENSIFIERS if i in text_lower)
     # Negation is scanned on the text with matched multi-word lexicon phrases
     # blanked out first - otherwise a phrase that itself contains a negation
@@ -671,6 +729,7 @@ def analyze(text: str) -> NlpIndicators:
         digital_harassment_score=scaled("digital_harassment"),
         manual_scavenging_score=scaled("manual_scavenging"),
         public_humiliation_score=scaled("public_humiliation"),
+        public_access_denial_score=scaled("public_access_denial"),
         confidence=round(confidence, 1),
         category_hits=hits,
         matched_keywords=matched_keywords,

@@ -39,6 +39,7 @@ WEIGHTS: dict[str, float] = {
     "land_displacement": 0.15,
     "digital_harassment": 0.15,
     "manual_scavenging": 0.15,
+    "public_access_denial": 0.15,
 }
 # v1.2.0: added caste_targeting and vulnerability as real SVI inputs. Until
 # this change, the NLP engine computed both (caste-targeting language,
@@ -70,7 +71,18 @@ WEIGHTS: dict[str, float] = {
 # emergency tier as sexual_violence/custodial_abuse/child_marriage -
 # deliberate public degradation on the basis of caste, Section 3(1) of the
 # SC/ST Prevention of Atrocities Act).
-MODEL_VERSION = "svi-weighted-v1.5.0"
+#
+# v1.6.0: added public_access_denial (weighted 0.15, same chronic/
+# structural tier as bonded_labor/land_displacement/digital_harassment/
+# manual_scavenging) - denial of access to a shared water source, temple,
+# or other public place on the basis of caste, one of the most commonly
+# cited, specifically enumerated forms of atrocity under Section 3(1) of
+# the Act. No new safety-floor category this round - fear/hopelessness/
+# trauma also gained more stress-symptom vocabulary in nlp_engine.LEXICON
+# (anxiety, PTSD/flashback language, burnout language), which raises the
+# fear/trauma/hopelessness inputs to this formula but changes no weight or
+# threshold here.
+MODEL_VERSION = "svi-weighted-v1.6.0"
 
 
 @dataclass
@@ -95,6 +107,7 @@ class SVIInputs:
     child_marriage_score: float = 0.0
     manual_scavenging: float = 0.0
     public_humiliation_score: float = 0.0
+    public_access_denial: float = 0.0
 
 
 @dataclass
@@ -143,6 +156,7 @@ def compute(inputs: SVIInputs) -> SVIResult:
         "land_displacement": inputs.land_displacement,
         "digital_harassment": inputs.digital_harassment,
         "manual_scavenging": inputs.manual_scavenging,
+        "public_access_denial": inputs.public_access_denial,
     }
 
     value = sum(components[k] * WEIGHTS[k] for k in WEIGHTS)

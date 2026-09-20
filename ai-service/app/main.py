@@ -264,6 +264,8 @@ def assess(body: AssessRequest) -> dict:
         authority_context_detected=nlp_result.authority_context_detected,
         sexual_violence_score=nlp_result.sexual_violence_score,
         custodial_abuse_score=nlp_result.custodial_abuse_score,
+        bonded_labor=nlp_result.bonded_labor_score,
+        land_displacement=nlp_result.land_displacement_score,
     )
     svi_result = svi_engine.compute(svi_inputs)
     drift.log_score(svi_result.value, svi_result.band)
@@ -317,6 +319,8 @@ def assess(body: AssessRequest) -> dict:
             "casteTargetingScore": nlp_result.caste_targeting_score,
             "sexualViolenceScore": nlp_result.sexual_violence_score,
             "custodialAbuseScore": nlp_result.custodial_abuse_score,
+            "bondedLaborScore": nlp_result.bonded_labor_score,
+            "landDisplacementScore": nlp_result.land_displacement_score,
             "confidence": nlp_result.confidence,
             "matchedKeywords": nlp_result.matched_keywords,
             "suicidalIdeationFlag": nlp_result.suicidal_ideation_flag,

@@ -149,6 +149,21 @@ LEXICON: dict[str, list[str]] = {
         "third degree", "custody death",
         "हिरासत में मौत", "हिरासत में मारपीट", "थाने में मारपीट",  # Hindi
     ],
+    # Two more atrocity-specific categories, same English+Hindi-only,
+    # grow-as-reviewed scope as sexual_violence/custodial_abuse above -
+    # chronic/structural harms (not immediate-emergency-tier), so unlike
+    # those two, these feed the SVI directly via svi_engine.WEIGHTS rather
+    # than a safety floor.
+    "bonded_labor": [
+        "bonded labor", "bonded labour", "forced labor", "forced labour", "unpaid labor", "unpaid labour",
+        "denied wages", "wages denied", "debt bondage", "forced to work without pay",
+        "बंधुआ मजदूरी", "मजदूरी नहीं दी", "जबरन मजदूरी",  # Hindi
+    ],
+    "land_displacement": [
+        "land grab", "illegally occupied our land", "evicted from our land", "forced eviction",
+        "encroached our land", "took our land", "grabbed our land",
+        "जमीन कब्जा", "जमीन से बेदखल",  # Hindi
+    ],
 }
 
 # Every term added by task #118 for the six languages the module docstring's
@@ -281,6 +296,11 @@ class NlpIndicators:
     # just its contribution buried inside a composite.
     sexual_violence_score: float = 0.0
     custodial_abuse_score: float = 0.0
+    # Direct 1:1 fields (like vulnerability/caste_targeting), not folded
+    # into trauma_score/threat_score - these are chronic/structural harms
+    # that feed the SVI directly via svi_engine.WEIGHTS instead.
+    bonded_labor_score: float = 0.0
+    land_displacement_score: float = 0.0
     category_hits: list[CategoryHit] = field(default_factory=list)
     matched_keywords: list[str] = field(default_factory=list)
     suicidal_ideation_flag: bool = False
@@ -373,6 +393,15 @@ _SEXUAL_VIOLENCE_FORCED_RE = re.compile(r"\bforced\s+(?:himself|herself|themselv
 # ("the death occurred while he was being held in..."), not terse.
 _CUSTODIAL_DEATH_RE = re.compile(r"\b(?:died|death)\b(?:\s+\w+){0,10}\s+custody\b")
 
+# Generalizes "bonded_labor" beyond the literal phrase list - "forced to
+# work for months without any pay", "forced to work and never got wages",
+# etc. share this structure without one fixed substring.
+_BONDED_LABOR_FORCED_WORK_RE = re.compile(r"\bforced\s+to\s+work\b(?:\s+\w+){0,6}\s+(?:without|no)\b(?:\s+\w+){0,2}\s+(?:pay|wages|payment|money)\b")
+
+# Generalizes "land_displacement" beyond the literal phrase list - "forced
+# us to leave our land", "forced them out of their home", etc.
+_LAND_DISPLACEMENT_FORCED_RE = re.compile(r"\bforced\s+(?:us|me|them|him|her)\b(?:\s+\w+){0,4}\s+(?:leave|off|out of)\b(?:\s+\w+){0,3}\s+(?:land|home|house)\b")
+
 _STRUCTURAL_PATTERN_FLOOR = 45.0  # matches one un-diminished keyword hit (see _category_score)
 
 
@@ -448,6 +477,8 @@ def analyze(text: str) -> NlpIndicators:
     _apply_structural_pattern(by_cat["threat"], _THREAT_FUTURE_VIOLENCE_RE, text_lower, "future violence threat")
     _apply_structural_pattern(by_cat["sexual_violence"], _SEXUAL_VIOLENCE_FORCED_RE, text_lower, "forced ... on/upon")
     _apply_structural_pattern(by_cat["custodial_abuse"], _CUSTODIAL_DEATH_RE, text_lower, "died/death ... custody")
+    _apply_structural_pattern(by_cat["bonded_labor"], _BONDED_LABOR_FORCED_WORK_RE, text_lower, "forced to work ... without pay")
+    _apply_structural_pattern(by_cat["land_displacement"], _LAND_DISPLACEMENT_FORCED_RE, text_lower, "forced ... off/out of land/home")
     intensifier_boost = 1.0 + 0.1 * sum(1 for i in INTENSIFIERS if i in text_lower)
     # Negation is scanned on the text with matched multi-word lexicon phrases
     # blanked out first - otherwise a phrase that itself contains a negation
@@ -539,6 +570,8 @@ def analyze(text: str) -> NlpIndicators:
         caste_targeting_score=scaled("caste_targeting"),
         sexual_violence_score=scaled("sexual_violence"),
         custodial_abuse_score=scaled("custodial_abuse"),
+        bonded_labor_score=scaled("bonded_labor"),
+        land_displacement_score=scaled("land_displacement"),
         confidence=round(confidence, 1),
         category_hits=hits,
         matched_keywords=matched_keywords,

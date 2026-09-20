@@ -35,6 +35,8 @@ WEIGHTS: dict[str, float] = {
     "vulnerability": 0.12,
     "anxiety": 0.22,
     "prior_escalations": 0.08,
+    "bonded_labor": 0.15,
+    "land_displacement": 0.15,
 }
 # v1.2.0: added caste_targeting and vulnerability as real SVI inputs. Until
 # this change, the NLP engine computed both (caste-targeting language,
@@ -46,7 +48,15 @@ WEIGHTS: dict[str, float] = {
 # caste-targeting remark with no other signal shouldn't alone reach CRITICAL,
 # but should measurably raise the score over an otherwise-identical case
 # without it.
-MODEL_VERSION = "svi-weighted-v1.2.0"
+#
+# v1.3.0: added bonded_labor and land_displacement, weighted the same as
+# caste_targeting (0.15) - same reasoning: real, common SC/ST-atrocity
+# categories (nlp_engine.LEXICON) that had no path into the score at all
+# until now. Unlike sexual_violence/custodial_abuse (which got a hard
+# safety floor - see compute() below), these are chronic/structural harms
+# rather than immediate-emergency-tier events, so the standard weighted-sum
+# mechanism fits better than a floor.
+MODEL_VERSION = "svi-weighted-v1.3.0"
 
 
 @dataclass
@@ -65,6 +75,8 @@ class SVIInputs:
     authority_context_detected: bool = False
     sexual_violence_score: float = 0.0
     custodial_abuse_score: float = 0.0
+    bonded_labor: float = 0.0
+    land_displacement: float = 0.0
 
 
 @dataclass
@@ -109,6 +121,8 @@ def compute(inputs: SVIInputs) -> SVIResult:
         "caste_targeting": inputs.caste_targeting,
         "vulnerability": inputs.vulnerability,
         "prior_escalations": prior_escalation_score,
+        "bonded_labor": inputs.bonded_labor,
+        "land_displacement": inputs.land_displacement,
     }
 
     value = sum(components[k] * WEIGHTS[k] for k in WEIGHTS)

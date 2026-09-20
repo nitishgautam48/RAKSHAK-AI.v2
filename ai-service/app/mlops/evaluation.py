@@ -62,6 +62,8 @@ def _svi_from_text(text: str) -> svi_engine.SVIResult:
             authority_context_detected=nlp.authority_context_detected,
             sexual_violence_score=nlp.sexual_violence_score,
             custodial_abuse_score=nlp.custodial_abuse_score,
+            bonded_labor=nlp.bonded_labor_score,
+            land_displacement=nlp.land_displacement_score,
         ),
     )
 

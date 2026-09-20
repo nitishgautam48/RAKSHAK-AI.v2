@@ -127,6 +127,33 @@ def test_nlp_new_categories_never_lower_an_existing_score():
     assert result.threat_score > 0
 
 
+def test_nlp_bonded_labor_keyword_detected():
+    result = nlp_engine.analyze("they made us do bonded labor and denied wages for six months")
+    assert result.bonded_labor_score > 0
+    assert "bonded labor" in result.matched_keywords
+
+
+def test_nlp_bonded_labor_structural_pattern_does_not_require_exact_phrase():
+    # No literal "bonded labor"/"denied wages" here - only the structural
+    # "forced to work ... without pay" construction.
+    result = nlp_engine.analyze("he was forced to work in the field every day without any pay")
+    assert result.bonded_labor_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_land_displacement_keyword_detected():
+    result = nlp_engine.analyze("they illegally occupied our land and destroyed our crops")
+    assert result.land_displacement_score > 0
+
+
+def test_nlp_land_displacement_structural_pattern_does_not_require_exact_phrase():
+    # No literal "land grab"/"evicted" here - only the structural "forced
+    # ... off/out of ... land/home" construction.
+    result = nlp_engine.analyze("they forced us off our land at gunpoint last week")
+    assert result.land_displacement_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should
@@ -294,6 +321,14 @@ def test_svi_severe_atrocity_floor_requires_the_threshold():
     inputs = svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, sexual_violence_score=10)
     result = svi_engine.compute(inputs)
     assert result.value < 55
+
+
+def test_svi_bonded_labor_and_land_displacement_affect_score():
+    # v1.3.0: these had no path into the score at all until now, the same
+    # kind of gap caste_targeting/vulnerability had before v1.2.0.
+    baseline = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0))
+    with_signal = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, bonded_labor=80, land_displacement=80))
+    assert with_signal.value > baseline.value
 
 
 def test_svi_caste_targeting_and_vulnerability_affect_score():

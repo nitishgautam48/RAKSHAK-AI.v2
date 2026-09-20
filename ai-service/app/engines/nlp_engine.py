@@ -66,6 +66,14 @@ LEXICON: dict[str, list[str]] = {
     "hopelessness": [
         "no hope", "give up", "hopeless", "no point", "nothing left", "cannot go on", "helpless",
         "no way out", "any way out", "don't know what to do", "no solution", "kuch nahi bacha",
+        # "don't want to live" was a real gap found via live testing (a real
+        # narrative - "i don't want to live this life anymore" - scored zero
+        # hopelessness despite being a textbook example of it). "dont" and
+        # "do not" variants included since apostrophe handling isn't
+        # normalized elsewhere in this matcher.
+        "don't want to live", "dont want to live", "do not want to live",
+        "no reason to live", "don't want to be alive", "dont want to be alive",
+
         "umeed nahi", "उम्मीद नहीं", "बेबस",  # Hindi
         "आशा नाही",  # Marathi
         "আশা নেই",  # Bengali
@@ -297,6 +305,19 @@ SUICIDAL_PATTERNS = [
 # trigger, not an auto-action.
 _SUICIDAL_END_LIFE_RE = re.compile(r"\bend\b(?:\s+\w+){0,4}\s+life\b")
 
+# Same structural-pattern reasoning as _SUICIDAL_END_LIFE_RE above, for a
+# different real phrasing family: a real narrative ("i don't want to live
+# this life anymore") scored zero suicidal-ideation despite being a direct
+# statement of it, because "don't want to live" wasn't in SUICIDAL_PATTERNS
+# and no structural pattern covered it either. Catches a negation ("don't"/
+# "dont"/"do not"/"no longer"/"can't"/"won't") within a few words of "want
+# to live" or "go on living" - covers "don't want to live", "no longer want
+# to live", "can't go on living", etc. without needing an exact phrase for
+# every negation/apostrophe variant.
+_SUICIDAL_DONT_WANT_TO_LIVE_RE = re.compile(
+    r"\b(?:don'?t|do\s+not|no\s+longer|can'?t|won'?t)\b(?:\s+\w+){0,3}\s+(?:want(?:s)?\s+to\s+live|go\s+on\s+living)\b",
+)
+
 
 def _normalize(text: str) -> str:
     return text.lower()
@@ -386,7 +407,11 @@ def analyze(text: str) -> NlpIndicators:
     )
 
     matched_suicidal_patterns = [p for p in SUICIDAL_PATTERNS if p in text_lower]
-    suicidal_flag = bool(matched_suicidal_patterns) or bool(_SUICIDAL_END_LIFE_RE.search(text_lower))
+    suicidal_flag = (
+        bool(matched_suicidal_patterns)
+        or bool(_SUICIDAL_END_LIFE_RE.search(text_lower))
+        or bool(_SUICIDAL_DONT_WANT_TO_LIVE_RE.search(text_lower))
+    )
     matched_keywords = sorted({t for h in hits for t in h.matched_terms})
 
     # Transparency flag, not a confidence adjustment (see NlpIndicators'

@@ -54,6 +54,28 @@ def test_nlp_suicidal_ideation_end_life_pattern_does_not_require_exact_phrase():
         assert nlp_engine.analyze(text).suicidal_ideation_flag is True, f"failed for: {text}"
 
 
+def test_nlp_dont_want_to_live_catches_real_reported_narrative():
+    # Real bug found via live testing: "i don't want to live this life
+    # anymore" scored SVI 23 (should hit the 55-point suicidal-ideation
+    # safety floor) because neither SUICIDAL_PATTERNS nor any structural
+    # pattern covered "don't want to live" phrasing, and the hopelessness
+    # lexicon didn't have it either (hopelessness_score was 0).
+    result = nlp_engine.analyze("i don't want to live this life anymore")
+    assert result.suicidal_ideation_flag is True
+    assert result.hopelessness_score > 0
+
+
+def test_nlp_dont_want_to_live_pattern_does_not_require_exact_phrase():
+    variants = [
+        "i dont want to live this life anymore",
+        "i do not want to live anymore",
+        "she no longer wants to live",
+        "i can't go on living like this",
+    ]
+    for text in variants:
+        assert nlp_engine.analyze(text).suicidal_ideation_flag is True, f"failed for: {text}"
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should

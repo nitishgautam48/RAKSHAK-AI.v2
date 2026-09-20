@@ -262,6 +262,8 @@ def assess(body: AssessRequest) -> dict:
         prior_escalations=body.prior_escalations,
         suicidal_ideation_flag=nlp_result.suicidal_ideation_flag,
         authority_context_detected=nlp_result.authority_context_detected,
+        sexual_violence_score=nlp_result.sexual_violence_score,
+        custodial_abuse_score=nlp_result.custodial_abuse_score,
     )
     svi_result = svi_engine.compute(svi_inputs)
     drift.log_score(svi_result.value, svi_result.band)
@@ -313,6 +315,8 @@ def assess(body: AssessRequest) -> dict:
             "hopelessnessScore": nlp_result.hopelessness_score,
             "vulnerabilityScore": nlp_result.vulnerability_score,
             "casteTargetingScore": nlp_result.caste_targeting_score,
+            "sexualViolenceScore": nlp_result.sexual_violence_score,
+            "custodialAbuseScore": nlp_result.custodial_abuse_score,
             "confidence": nlp_result.confidence,
             "matchedKeywords": nlp_result.matched_keywords,
             "suicidalIdeationFlag": nlp_result.suicidal_ideation_flag,

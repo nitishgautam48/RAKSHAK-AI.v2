@@ -76,6 +76,57 @@ def test_nlp_dont_want_to_live_pattern_does_not_require_exact_phrase():
         assert nlp_engine.analyze(text).suicidal_ideation_flag is True, f"failed for: {text}"
 
 
+def test_nlp_sexual_violence_keyword_detected():
+    result = nlp_engine.analyze("she was raped by the landlord's son")
+    assert result.sexual_violence_score > 0
+    assert "raped" in result.matched_keywords
+    # A severe, specific signal should also push the trauma composite up.
+    assert result.trauma_score > 0
+
+
+def test_nlp_sexual_violence_structural_pattern_does_not_require_exact_phrase():
+    # No literal "rape"/"molest"/"assault" keyword here - only the
+    # structural "forced ... on/upon" construction.
+    result = nlp_engine.analyze("he forced himself on her when no one else was home")
+    assert result.sexual_violence_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_custodial_abuse_keyword_detected():
+    result = nlp_engine.analyze("he died in police custody after being beaten in custody")
+    assert result.custodial_abuse_score > 0
+    # Custodial abuse is folded into threat_score - an authority abusing
+    # its own custody power is an active threat pattern, not just history.
+    assert result.threat_score > 0
+
+
+def test_nlp_custodial_abuse_structural_pattern_does_not_require_exact_phrase():
+    # Word order the literal phrase list doesn't cover: "death ... custody"
+    # rather than "died in custody"/"custodial death".
+    result = nlp_engine.analyze("the death occurred while he was held in judicial custody")
+    assert result.custodial_abuse_score > 0
+
+
+def test_nlp_threat_future_violence_structural_pattern_does_not_require_exact_phrase():
+    # "harm" (unlike "kill"/"beat"/"burn"/"attack") isn't itself a listed
+    # threat keyword, and there's no "threat"/"dhamki"/etc. word here either
+    # - only the future-tense construction should fire this.
+    result = nlp_engine.analyze("they will harm us again tomorrow if we do not leave")
+    assert result.threat_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_new_categories_never_lower_an_existing_score():
+    # Sanity check on the composite-formula rewrite: a narrative with only
+    # the ORIGINAL categories (no sexual_violence/custodial_abuse signal at
+    # all) must score identically to before this change - the new terms are
+    # additive only.
+    result = nlp_engine.analyze("They threatened to kill us and burn our house.")
+    assert result.sexual_violence_score == 0
+    assert result.custodial_abuse_score == 0
+    assert result.threat_score > 0
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should
@@ -207,6 +258,42 @@ def test_svi_suicidal_floor_does_not_lower_an_already_higher_score():
     inputs = svi_engine.SVIInputs(fear=100, trauma=100, hopelessness=100, anxiety=100, voice_stress=100, isolation=100, threat=100, suicidal_ideation_flag=True)
     result = svi_engine.compute(inputs)
     assert result.band == "CRITICAL"
+
+
+def test_svi_severe_atrocity_floors_the_score():
+    # Real gap found via live testing: a disclosed rape ("she was raped by
+    # the landlord's son...") only fed SVI indirectly through trauma_score's
+    # diluted 0.35 weight, capping its own contribution to SVI at roughly 14
+    # points - the assessment landed in the LOW band. Sexual violence and
+    # custodial abuse are severe enough on their own to floor the score at
+    # HIGH, the same way suicidal ideation already does.
+    inputs = svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, sexual_violence_score=70)
+    result = svi_engine.compute(inputs)
+    assert result.value >= 55
+    assert result.band in ("HIGH", "CRITICAL")
+
+
+def test_svi_custodial_abuse_also_floors_the_score():
+    inputs = svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, custodial_abuse_score=60)
+    result = svi_engine.compute(inputs)
+    assert result.value >= 55
+    assert result.band in ("HIGH", "CRITICAL")
+
+
+def test_svi_severe_atrocity_floor_does_not_lower_an_already_higher_score():
+    inputs = svi_engine.SVIInputs(fear=100, trauma=100, hopelessness=100, anxiety=100, voice_stress=100, isolation=100, threat=100, sexual_violence_score=100)
+    result = svi_engine.compute(inputs)
+    assert result.band == "CRITICAL"
+
+
+def test_svi_severe_atrocity_floor_requires_the_threshold():
+    # A low, borderline sexual_violence_score (below the 50-point
+    # activation threshold) should NOT trigger the floor - this is a safety
+    # floor for a credible severe signal, not a hair-trigger on any nonzero
+    # value.
+    inputs = svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, sexual_violence_score=10)
+    result = svi_engine.compute(inputs)
+    assert result.value < 55
 
 
 def test_svi_caste_targeting_and_vulnerability_affect_score():

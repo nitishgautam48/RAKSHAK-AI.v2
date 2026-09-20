@@ -61,7 +61,7 @@ MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 # having their own output field, and "trauma_score" itself is a composite
 # with no matching LEXICON category to build reference phrases from at all.
 # Kept in `scores`/`top_matches` for transparency even when not blendable.
-BLENDABLE_CATEGORIES = ["fear", "threat", "hopelessness", "isolation", "vulnerability", "caste_targeting"]
+BLENDABLE_CATEGORIES = ["fear", "threat", "hopelessness", "isolation", "vulnerability", "caste_targeting", "sexual_violence", "custodial_abuse"]
 
 # Cosine similarity from this model for genuinely related-but-differently-
 # worded sentences typically lands well above unrelated-sentence similarity,

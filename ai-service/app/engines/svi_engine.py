@@ -63,6 +63,8 @@ class SVIInputs:
     prior_escalations: int = 0  # count of prior ESCALATED status changes on this case
     suicidal_ideation_flag: bool = False
     authority_context_detected: bool = False
+    sexual_violence_score: float = 0.0
+    custodial_abuse_score: float = 0.0
 
 
 @dataclass
@@ -170,6 +172,36 @@ def compute(inputs: SVIInputs) -> SVIResult:
             ),
         )
         value = SUICIDAL_IDEATION_FLOOR
+
+    # Same reasoning and same pattern as the suicidal-ideation floor above -
+    # found live, the same way that one was: a disclosed rape ("she was
+    # raped by...") only fed SVI indirectly through trauma_score's diluted
+    # 0.35 weight, capping its own maximum possible contribution to SVI at
+    # roughly 14 points (0.35 x 100 x 0.40 trauma weight) - nowhere near
+    # enough for one of the most severe atrocity categories this platform
+    # exists to catch. Custodial death/torture - abuse by the very
+    # authority meant to protect someone - is the same kind of category:
+    # severe enough on its own to not be left to a diluted composite. Both
+    # floor at HIGH (55), same as suicidal ideation, not CRITICAL - see that
+    # floor's comment for why. The 50-point activation threshold and the
+    # 55-point floor value are disclosed policy calibrations pending review
+    # by someone with real domain/legal expertise, like every other
+    # constant in this function.
+    SEVERE_ATROCITY_SCORE_THRESHOLD = 50.0
+    SEVERE_ATROCITY_FLOOR = 55.0
+    if (
+        inputs.sexual_violence_score >= SEVERE_ATROCITY_SCORE_THRESHOLD or inputs.custodial_abuse_score >= SEVERE_ATROCITY_SCORE_THRESHOLD
+    ) and value < SEVERE_ATROCITY_FLOOR:
+        contributions.append(
+            Contribution(
+                label="Severe Atrocity Safety Floor",
+                raw_value=max(inputs.sexual_violence_score, inputs.custodial_abuse_score),
+                weight=0.0,
+                contribution_pct=round(SEVERE_ATROCITY_FLOOR - value, 1),
+                direction="increase",
+            ),
+        )
+        value = SEVERE_ATROCITY_FLOOR
 
     contributions.sort(key=lambda c: c.contribution_pct, reverse=True)
 

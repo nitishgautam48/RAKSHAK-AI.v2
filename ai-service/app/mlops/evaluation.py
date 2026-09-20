@@ -60,6 +60,8 @@ def _svi_from_text(text: str) -> svi_engine.SVIResult:
             vulnerability=nlp.vulnerability_score,
             suicidal_ideation_flag=nlp.suicidal_ideation_flag,
             authority_context_detected=nlp.authority_context_detected,
+            sexual_violence_score=nlp.sexual_violence_score,
+            custodial_abuse_score=nlp.custodial_abuse_score,
         ),
     )
 

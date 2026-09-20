@@ -129,6 +129,26 @@ LEXICON: dict[str, list[str]] = {
         "ಜಾತಿ", "ದಲಿತ",  # Kannada
         "ଜାତି", "ଦଳିତ",  # Odia
     ],
+    # Two new categories (task: "expand the NLP lexicon" - atrocity-specific
+    # categories direction). English + Hindi only for now, deliberately -
+    # unlike the other categories' six-more-language rollout (task #118),
+    # generating unreviewed terms for SEXUAL violence terminology
+    # specifically carries a higher mistranslation/misuse risk than most
+    # other categories, so this starts narrower and should only grow "for
+    # any other language actually seen in submitted narratives" (the module
+    # docstring's own stated expansion principle), reviewed as it's added,
+    # not mass-generated up front.
+    "sexual_violence": [
+        "rape", "raped", "molest", "molested", "molestation", "sexual assault", "sexually assaulted",
+        "outraged her modesty", "outrage her modesty",  # IPC Section 354 terminology, real complaint language
+        "inappropriately touched", "touched inappropriately",
+        "बलात्कार", "छेड़छाड़", "यौन उत्पीड़न",  # Hindi
+    ],
+    "custodial_abuse": [
+        "custodial death", "died in custody", "custodial torture", "beaten in custody", "police custody",
+        "third degree", "custody death",
+        "हिरासत में मौत", "हिरासत में मारपीट", "थाने में मारपीट",  # Hindi
+    ],
 }
 
 # Every term added by task #118 for the six languages the module docstring's
@@ -255,6 +275,12 @@ class NlpIndicators:
     vulnerability_score: float
     caste_targeting_score: float
     confidence: float
+    # Own dedicated fields (unlike physical_harm/retaliation, which fold
+    # silently into trauma_score/threat_score below) - these two are severe
+    # and specific enough that staff should see the number directly, not
+    # just its contribution buried inside a composite.
+    sexual_violence_score: float = 0.0
+    custodial_abuse_score: float = 0.0
     category_hits: list[CategoryHit] = field(default_factory=list)
     matched_keywords: list[str] = field(default_factory=list)
     suicidal_ideation_flag: bool = False
@@ -318,6 +344,37 @@ _SUICIDAL_DONT_WANT_TO_LIVE_RE = re.compile(
     r"\b(?:don'?t|do\s+not|no\s+longer|can'?t|won'?t)\b(?:\s+\w+){0,3}\s+(?:want(?:s)?\s+to\s+live|go\s+on\s+living)\b",
 )
 
+# Structural patterns for other categories, same "generalize beyond an exact
+# phrase list, only ever RAISE a score, never suppress" philosophy as the
+# two suicidal-ideation patterns above. Each is applied in analyze() via
+# _apply_structural_pattern() - a match sets that category's raw score to at
+# least _STRUCTURAL_PATTERN_FLOOR (equivalent to one real keyword hit) if it
+# wasn't already there, and the match is recorded in matched_keywords like a
+# real hit, so it's visible in the explainability breakdown, not a silent
+# nudge to a number nobody can trace.
+
+# Generalizes the "threat" category beyond fixed violence-verb keywords -
+# catches an explicit future-tense threat construction ("will kill", "gonna
+# beat", "going to burn") regardless of which specific violence verb is
+# used, rather than requiring every verb to be pre-listed.
+_THREAT_FUTURE_VIOLENCE_RE = re.compile(r"\b(?:will|gonna|going to)\b(?:\s+\w+){0,3}\s+(?:kill|beat|burn|hurt|harm|attack|rape)\b")
+
+# Generalizes "sexual_violence" beyond the literal phrase list - "forced
+# himself on her", "forced herself upon him", etc. are common real phrasings
+# that don't all share one exact substring.
+_SEXUAL_VIOLENCE_FORCED_RE = re.compile(r"\bforced\s+(?:himself|herself|themselves)\b(?:\s+\w+){0,3}\s+(?:on|upon)\b")
+
+# Generalizes "custodial_abuse" beyond the literal phrase list - "died in
+# police custody", "death while in custody", "the death occurred while he
+# was held in judicial custody", etc. share the "died/death ... custody"
+# structure without a single fixed substring covering all word orders. A
+# wider gap than the other structural patterns here (0-10 words, not 0-3/4)
+# because real sentences describing a custodial death are often long
+# ("the death occurred while he was being held in..."), not terse.
+_CUSTODIAL_DEATH_RE = re.compile(r"\b(?:died|death)\b(?:\s+\w+){0,10}\s+custody\b")
+
+_STRUCTURAL_PATTERN_FLOOR = 45.0  # matches one un-diminished keyword hit (see _category_score)
+
 
 def _normalize(text: str) -> str:
     return text.lower()
@@ -365,6 +422,16 @@ def _category_score(text_lower: str, terms: list[str]) -> CategoryHit:
     return CategoryHit(category="", matched_terms=matched, raw_count=count, score=score)
 
 
+def _apply_structural_pattern(hit: CategoryHit, pattern: re.Pattern[str], text_lower: str, label: str) -> None:
+    """Raises `hit`'s score to _STRUCTURAL_PATTERN_FLOOR if `pattern` matches
+    and the keyword-only score wasn't already at least that high - never
+    lowers it. The matched pattern is recorded in matched_terms exactly like
+    a real keyword hit, so it shows up in the explainability breakdown."""
+    if pattern.search(text_lower) and hit.score < _STRUCTURAL_PATTERN_FLOOR:
+        hit.score = _STRUCTURAL_PATTERN_FLOOR
+        hit.matched_terms.append(f"(pattern) {label}")
+
+
 def analyze(text: str) -> NlpIndicators:
     text = text or ""
     text_lower = _normalize(text)
@@ -378,6 +445,9 @@ def analyze(text: str) -> NlpIndicators:
         hits.append(hit)
 
     by_cat = {h.category: h for h in hits}
+    _apply_structural_pattern(by_cat["threat"], _THREAT_FUTURE_VIOLENCE_RE, text_lower, "future violence threat")
+    _apply_structural_pattern(by_cat["sexual_violence"], _SEXUAL_VIOLENCE_FORCED_RE, text_lower, "forced ... on/upon")
+    _apply_structural_pattern(by_cat["custodial_abuse"], _CUSTODIAL_DEATH_RE, text_lower, "died/death ... custody")
     intensifier_boost = 1.0 + 0.1 * sum(1 for i in INTENSIFIERS if i in text_lower)
     # Negation is scanned on the text with matched multi-word lexicon phrases
     # blanked out first - otherwise a phrase that itself contains a negation
@@ -398,11 +468,31 @@ def analyze(text: str) -> NlpIndicators:
     # real signal but conceptually a form of implicit/conditional threat, so
     # it blends into threat_score at half-weight rather than sitting inert -
     # a real bug found while expanding the evaluation set: this category was
-    # being scored but never actually used anywhere.
-    threat_score = round(min(100.0, scaled("threat") + 0.5 * scaled("retaliation")), 1)
+    # being scored but never actually used anywhere. "custodial_abuse" is
+    # folded in too, at a similar weight: abuse committed by the very
+    # authority meant to protect someone is itself an active threat
+    # pattern, not just a historical trauma fact.
+    threat_score = round(min(100.0, scaled("threat") + 0.5 * scaled("retaliation") + 0.4 * scaled("custodial_abuse")), 1)
 
+    # trauma_score's weights below deliberately do NOT sum to 1.0 anymore
+    # (0.3 + 0.25 + 0.25 + 0.2 + 0.35 + 0.3 = 1.65) - same reasoning
+    # svi_engine.py's own module docstring gives for its weights: a single
+    # severe, specific signal (sexual violence, custodial abuse) should be
+    # able to push trauma_score up substantially on its own, not be diluted
+    # into a fixed-proportion average with four unrelated dimensions. Both
+    # new weights are disclosed policy calibrations, not derived from any
+    # dataset - same caveat as every other weight in this pipeline, pending
+    # review by someone with real domain expertise.
     trauma_score = round(
-        min(100.0, 0.3 * threat_score + 0.25 * scaled("physical_harm") + 0.25 * scaled("fear") + 0.2 * scaled("hopelessness")),
+        min(
+            100.0,
+            0.3 * threat_score
+            + 0.25 * scaled("physical_harm")
+            + 0.25 * scaled("fear")
+            + 0.2 * scaled("hopelessness")
+            + 0.35 * scaled("sexual_violence")
+            + 0.3 * scaled("custodial_abuse"),
+        ),
         1,
     )
 
@@ -447,6 +537,8 @@ def analyze(text: str) -> NlpIndicators:
         hopelessness_score=scaled("hopelessness"),
         vulnerability_score=scaled("vulnerability"),
         caste_targeting_score=scaled("caste_targeting"),
+        sexual_violence_score=scaled("sexual_violence"),
+        custodial_abuse_score=scaled("custodial_abuse"),
         confidence=round(confidence, 1),
         category_hits=hits,
         matched_keywords=matched_keywords,

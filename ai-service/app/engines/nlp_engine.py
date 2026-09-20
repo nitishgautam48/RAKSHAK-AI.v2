@@ -164,6 +164,21 @@ LEXICON: dict[str, list[str]] = {
         "encroached our land", "took our land", "grabbed our land",
         "जमीन कब्जा", "जमीन से बेदखल",  # Hindi
     ],
+    # child_marriage is treated as immediate-emergency tier (same as
+    # sexual_violence/custodial_abuse - gets the SVI safety floor below,
+    # not just a diluted weight): forcing a minor into marriage is itself
+    # grave, ongoing exploitation of a child, not a one-time historical harm.
+    "child_marriage": [
+        "child marriage", "underage marriage", "married off", "forced marriage", "married before 18",
+        "बाल विवाह", "जबरन शादी", "नाबालिग विवाह",  # Hindi
+    ],
+    # digital_harassment is chronic/structural tier (same as bonded_labor/
+    # land_displacement - a weighted SVI input, not a floor).
+    "digital_harassment": [
+        "morphed photo", "morphed image", "cyberbullying", "cyber bullying", "online harassment",
+        "leaked my photo", "blackmail", "doxxed", "doxxing", "fake profile", "obscene messages",
+        "फर्जी फोटो", "साइबर उत्पीड़न", "अश्लील संदेश",  # Hindi
+    ],
 }
 
 # Every term added by task #118 for the six languages the module docstring's
@@ -301,6 +316,11 @@ class NlpIndicators:
     # that feed the SVI directly via svi_engine.WEIGHTS instead.
     bonded_labor_score: float = 0.0
     land_displacement_score: float = 0.0
+    # child_marriage feeds the SVI safety floor (immediate-emergency tier,
+    # like sexual_violence/custodial_abuse); digital_harassment feeds a
+    # direct SVI weight (chronic tier, like bonded_labor/land_displacement).
+    child_marriage_score: float = 0.0
+    digital_harassment_score: float = 0.0
     category_hits: list[CategoryHit] = field(default_factory=list)
     matched_keywords: list[str] = field(default_factory=list)
     suicidal_ideation_flag: bool = False
@@ -402,6 +422,22 @@ _BONDED_LABOR_FORCED_WORK_RE = re.compile(r"\bforced\s+to\s+work\b(?:\s+\w+){0,6
 # us to leave our land", "forced them out of their home", etc.
 _LAND_DISPLACEMENT_FORCED_RE = re.compile(r"\bforced\s+(?:us|me|them|him|her)\b(?:\s+\w+){0,4}\s+(?:leave|off|out of)\b(?:\s+\w+){0,3}\s+(?:land|home|house)\b")
 
+# Generalizes "child_marriage" beyond the literal phrase list - "married at
+# the age of 13", "married off at 14", "married at 9", etc. share a
+# "married ... at ... [age under 18]" structure. Ages 1-17 only, deliberately
+# (an adult marriage mentioning an age isn't this signal).
+_CHILD_MARRIAGE_AGE_RE = re.compile(r"\bmarried\s+(?:off\s+)?at\s+(?:the\s+age\s+of\s+)?(?:1[0-7]|[1-9])\b")
+# "forced her/him/me/them to marry" - a common real phrasing for a forced
+# marriage that doesn't always use the literal word "marriage".
+_CHILD_MARRIAGE_FORCED_RE = re.compile(r"\bforced\s+(?:her|him|me|us|them)\s+to\s+marry\b")
+
+# Generalizes "digital_harassment" beyond the literal phrase list -
+# "posted my photos online without my consent", "shared her pictures
+# without permission", etc.
+_DIGITAL_HARASSMENT_POSTED_RE = re.compile(
+    r"\b(?:posted|shared|uploaded)\b(?:\s+\w+){0,4}\s+(?:photo|photos|video|videos|image|images|picture|pictures)\b(?:\s+\w+){0,10}\s+(?:without|no)\b(?:\s+\w+){0,2}\s+(?:consent|permission)\b",
+)
+
 _STRUCTURAL_PATTERN_FLOOR = 45.0  # matches one un-diminished keyword hit (see _category_score)
 
 
@@ -479,6 +515,9 @@ def analyze(text: str) -> NlpIndicators:
     _apply_structural_pattern(by_cat["custodial_abuse"], _CUSTODIAL_DEATH_RE, text_lower, "died/death ... custody")
     _apply_structural_pattern(by_cat["bonded_labor"], _BONDED_LABOR_FORCED_WORK_RE, text_lower, "forced to work ... without pay")
     _apply_structural_pattern(by_cat["land_displacement"], _LAND_DISPLACEMENT_FORCED_RE, text_lower, "forced ... off/out of land/home")
+    _apply_structural_pattern(by_cat["child_marriage"], _CHILD_MARRIAGE_AGE_RE, text_lower, "married ... at [age under 18]")
+    _apply_structural_pattern(by_cat["child_marriage"], _CHILD_MARRIAGE_FORCED_RE, text_lower, "forced ... to marry")
+    _apply_structural_pattern(by_cat["digital_harassment"], _DIGITAL_HARASSMENT_POSTED_RE, text_lower, "posted/shared ... photo ... without consent")
     intensifier_boost = 1.0 + 0.1 * sum(1 for i in INTENSIFIERS if i in text_lower)
     # Negation is scanned on the text with matched multi-word lexicon phrases
     # blanked out first - otherwise a phrase that itself contains a negation
@@ -572,6 +611,8 @@ def analyze(text: str) -> NlpIndicators:
         custodial_abuse_score=scaled("custodial_abuse"),
         bonded_labor_score=scaled("bonded_labor"),
         land_displacement_score=scaled("land_displacement"),
+        child_marriage_score=scaled("child_marriage"),
+        digital_harassment_score=scaled("digital_harassment"),
         confidence=round(confidence, 1),
         category_hits=hits,
         matched_keywords=matched_keywords,

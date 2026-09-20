@@ -266,6 +266,8 @@ def assess(body: AssessRequest) -> dict:
         custodial_abuse_score=nlp_result.custodial_abuse_score,
         bonded_labor=nlp_result.bonded_labor_score,
         land_displacement=nlp_result.land_displacement_score,
+        digital_harassment=nlp_result.digital_harassment_score,
+        child_marriage_score=nlp_result.child_marriage_score,
     )
     svi_result = svi_engine.compute(svi_inputs)
     drift.log_score(svi_result.value, svi_result.band)
@@ -321,6 +323,8 @@ def assess(body: AssessRequest) -> dict:
             "custodialAbuseScore": nlp_result.custodial_abuse_score,
             "bondedLaborScore": nlp_result.bonded_labor_score,
             "landDisplacementScore": nlp_result.land_displacement_score,
+            "childMarriageScore": nlp_result.child_marriage_score,
+            "digitalHarassmentScore": nlp_result.digital_harassment_score,
             "confidence": nlp_result.confidence,
             "matchedKeywords": nlp_result.matched_keywords,
             "suicidalIdeationFlag": nlp_result.suicidal_ideation_flag,

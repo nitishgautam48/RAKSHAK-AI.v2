@@ -154,6 +154,50 @@ def test_nlp_land_displacement_structural_pattern_does_not_require_exact_phrase(
     assert any(t.startswith("(pattern)") for t in result.matched_keywords)
 
 
+def test_nlp_child_marriage_keyword_detected():
+    result = nlp_engine.analyze("her family arranged a child marriage for her")
+    assert result.child_marriage_score > 0
+
+
+def test_nlp_child_marriage_age_structural_pattern_does_not_require_exact_phrase():
+    # No literal phrase from the lexicon here ("married off", "underage
+    # marriage", "forced marriage", "married before 18" are all absent) -
+    # only the structural "married ... at [age under 18]" construction.
+    result = nlp_engine.analyze("the girl was married at the age of 13 to a much older man")
+    assert result.child_marriage_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_child_marriage_forced_structural_pattern_does_not_require_exact_phrase():
+    result = nlp_engine.analyze("her parents forced her to marry against her wishes")
+    assert result.child_marriage_score > 0
+
+
+def test_nlp_digital_harassment_keyword_detected():
+    result = nlp_engine.analyze("they created a morphed photo of her and threatened blackmail")
+    assert result.digital_harassment_score > 0
+
+
+def test_nlp_digital_harassment_structural_pattern_does_not_require_exact_phrase():
+    # No literal "morphed photo"/"leaked" here - only the structural
+    # "posted/shared ... photo ... without consent" construction.
+    result = nlp_engine.analyze("he shared her pictures online without her consent")
+    assert result.digital_harassment_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_digital_harassment_structural_pattern_tolerates_a_wide_word_gap():
+    # Real phrasing commonly separates "photo/video" from "without consent"
+    # by more than a couple of words (e.g. "of me on his social media page")
+    # - found live while verifying this category, the same adjacency-gap bug
+    # class already hit and fixed for custodial_abuse/bonded_labor.
+    result = nlp_engine.analyze(
+        "he posted a video of me on his social media page without my consent and now everyone has seen it",
+    )
+    assert result.digital_harassment_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should
@@ -321,6 +365,25 @@ def test_svi_severe_atrocity_floor_requires_the_threshold():
     inputs = svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, sexual_violence_score=10)
     result = svi_engine.compute(inputs)
     assert result.value < 55
+
+
+def test_svi_child_marriage_floors_the_score():
+    # child_marriage joined the immediate-emergency-tier safety floor, same
+    # as sexual_violence/custodial_abuse - not just a diluted weight.
+    inputs = svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, child_marriage_score=70)
+    result = svi_engine.compute(inputs)
+    assert result.value >= 55
+    assert result.band in ("HIGH", "CRITICAL")
+
+
+def test_svi_digital_harassment_affects_score_without_flooring_it():
+    # digital_harassment is chronic-tier (weighted input, like bonded_labor/
+    # land_displacement) - it should raise the score but NOT floor it at
+    # HIGH on its own, unlike child_marriage above.
+    baseline = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0))
+    with_signal = svi_engine.compute(svi_engine.SVIInputs(fear=0, trauma=0, hopelessness=0, anxiety=0, voice_stress=0, isolation=0, threat=0, digital_harassment=80))
+    assert with_signal.value > baseline.value
+    assert with_signal.band not in ("HIGH", "CRITICAL")
 
 
 def test_svi_bonded_labor_and_land_displacement_affect_score():

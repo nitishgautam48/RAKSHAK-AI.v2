@@ -37,6 +37,7 @@ WEIGHTS: dict[str, float] = {
     "prior_escalations": 0.08,
     "bonded_labor": 0.15,
     "land_displacement": 0.15,
+    "digital_harassment": 0.15,
 }
 # v1.2.0: added caste_targeting and vulnerability as real SVI inputs. Until
 # this change, the NLP engine computed both (caste-targeting language,
@@ -56,7 +57,11 @@ WEIGHTS: dict[str, float] = {
 # safety floor - see compute() below), these are chronic/structural harms
 # rather than immediate-emergency-tier events, so the standard weighted-sum
 # mechanism fits better than a floor.
-MODEL_VERSION = "svi-weighted-v1.3.0"
+#
+# v1.4.0: added digital_harassment (weighted 0.15, same tier as
+# bonded_labor/land_displacement) and child_marriage (joined the safety
+# floor below, same tier as sexual_violence/custodial_abuse).
+MODEL_VERSION = "svi-weighted-v1.4.0"
 
 
 @dataclass
@@ -77,6 +82,8 @@ class SVIInputs:
     custodial_abuse_score: float = 0.0
     bonded_labor: float = 0.0
     land_displacement: float = 0.0
+    digital_harassment: float = 0.0
+    child_marriage_score: float = 0.0
 
 
 @dataclass
@@ -123,6 +130,7 @@ def compute(inputs: SVIInputs) -> SVIResult:
         "prior_escalations": prior_escalation_score,
         "bonded_labor": inputs.bonded_labor,
         "land_displacement": inputs.land_displacement,
+        "digital_harassment": inputs.digital_harassment,
     }
 
     value = sum(components[k] * WEIGHTS[k] for k in WEIGHTS)
@@ -201,15 +209,18 @@ def compute(inputs: SVIInputs) -> SVIResult:
     # 55-point floor value are disclosed policy calibrations pending review
     # by someone with real domain/legal expertise, like every other
     # constant in this function.
+    # child_marriage joined this floor (not the diluted-weight path) for the
+    # same reason as the other two: forcing a minor into marriage is grave,
+    # ongoing exploitation of a child, not a one-time historical harm that a
+    # diluted composite could reasonably represent.
     SEVERE_ATROCITY_SCORE_THRESHOLD = 50.0
     SEVERE_ATROCITY_FLOOR = 55.0
-    if (
-        inputs.sexual_violence_score >= SEVERE_ATROCITY_SCORE_THRESHOLD or inputs.custodial_abuse_score >= SEVERE_ATROCITY_SCORE_THRESHOLD
-    ) and value < SEVERE_ATROCITY_FLOOR:
+    severe_atrocity_scores = (inputs.sexual_violence_score, inputs.custodial_abuse_score, inputs.child_marriage_score)
+    if max(severe_atrocity_scores) >= SEVERE_ATROCITY_SCORE_THRESHOLD and value < SEVERE_ATROCITY_FLOOR:
         contributions.append(
             Contribution(
                 label="Severe Atrocity Safety Floor",
-                raw_value=max(inputs.sexual_violence_score, inputs.custodial_abuse_score),
+                raw_value=max(severe_atrocity_scores),
                 weight=0.0,
                 contribution_pct=round(SEVERE_ATROCITY_FLOOR - value, 1),
                 direction="increase",

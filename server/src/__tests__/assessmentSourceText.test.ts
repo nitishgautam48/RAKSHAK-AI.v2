@@ -27,3 +27,13 @@ test('an empty whisper transcript falls back to the submitted narrative rather t
   const result = deriveAnalyzedText(ai, 'Fallback narrative text.');
   assert.equal(result, 'Fallback narrative text.');
 });
+
+// Regression guard for the generalization from an exact 'whisper_local'
+// match to "any source other than operator_transcript" - added alongside
+// the indic_conformer ASR provider (ai-service/app/engines/speech_engine.py)
+// so a second real ASR provider didn't need a second hand-maintained check.
+test('a real indic_conformer transcript is used as the analyzed text too, not just whisper_local', () => {
+  const ai = { transcript: { transcript: 'mujhe madad chahiye, unhone dhamki di', source: 'indic_conformer' } };
+  const result = deriveAnalyzedText(ai, '[Voice message submitted - no typed narrative. See attached audio recording.]');
+  assert.equal(result, 'mujhe madad chahiye, unhone dhamki di');
+});

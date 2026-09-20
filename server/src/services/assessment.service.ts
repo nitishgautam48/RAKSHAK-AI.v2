@@ -9,16 +9,20 @@ export interface PersistAssessmentInput {
   actorId: string | null; // null for system/seed-generated or emergency-token-originated assessments
 }
 
-// A real machine transcript (ai.transcript.source === 'whisper_local') is
-// what every AI engine actually analyzed for a voice-only complaint (see
-// ai-service/app/main.py's analysis_text) - submittedNarrative in that case
-// is only the VOICE_ONLY_PLACEHOLDER text. sourceText must record what was
-// truly analyzed, not just what the client happened to submit as the
-// narrative field, or every downstream reader (NLP Analysis page, audit
-// trail) would show text disconnected from the scores displayed next to it.
+// A real machine transcript (any source other than 'operator_transcript' -
+// e.g. 'whisper_local' or 'indic_conformer', see ai-service/app/
+// speech_engine.py) is what every AI engine actually analyzed for a
+// voice-only complaint (see ai-service/app/main.py's analysis_text) -
+// submittedNarrative in that case is only the VOICE_ONLY_PLACEHOLDER text.
+// sourceText must record what was truly analyzed, not just what the client
+// happened to submit as the narrative field, or every downstream reader
+// (NLP Analysis page, audit trail) would show text disconnected from the
+// scores displayed next to it. Checked as "not the operator fallback"
+// rather than an exact match per real ASR provider name, so this doesn't
+// need editing again the next time a new provider is added.
 // Pure function, exported for direct unit testing without a database.
 export function deriveAnalyzedText(ai: { transcript: Pick<AssessResponse['transcript'], 'transcript' | 'source'> }, submittedNarrative: string): string {
-  return ai.transcript.source === 'whisper_local' && ai.transcript.transcript.trim()
+  return ai.transcript.source !== 'operator_transcript' && ai.transcript.transcript.trim()
     ? ai.transcript.transcript
     : submittedNarrative;
 }

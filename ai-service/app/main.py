@@ -132,8 +132,15 @@ def assess(body: AssessRequest) -> dict:
     # analyzes the real spoken words, not the typed narrative - for a
     # voice-only complaint the typed narrative is just the placeholder text
     # (see FileComplaint.jsx's VOICE_ONLY_PLACEHOLDER) and carries no signal
-    # of its own.
-    analysis_text = transcript.transcript if transcript.source == "whisper_local" and transcript.transcript.strip() else body.narrative
+    # of its own. Checked as "not the operator fallback" rather than
+    # "== whisper_local" specifically, so a real transcript from ANY ASR
+    # provider (whisper_local, indic_conformer, or a future one) counts -
+    # the alternative (an == check per provider name) would need editing
+    # again every time a new provider is added, which is exactly the kind
+    # of parallel-list drift this codebase's other engines deliberately
+    # avoid (see e.g. semantic_engine.py pulling reference phrases directly
+    # from nlp_engine.LEXICON instead of a hand-duplicated list).
+    analysis_text = transcript.transcript if transcript.source != "operator_transcript" and transcript.transcript.strip() else body.narrative
 
     voice_result = None
     if audio_bytes:

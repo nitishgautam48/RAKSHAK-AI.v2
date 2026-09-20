@@ -13,6 +13,13 @@ const SOURCE_META = {
     bg: 'oklch(0.72 0.15 145 / 0.12)',
     title: 'Machine-transcribed from the actual submitted audio.',
   },
+  indic_conformer: {
+    label: 'Real transcript (IndicConformer)',
+    icon: '\u{1F3A4}', // microphone
+    color: 'oklch(0.72 0.15 145)',
+    bg: 'oklch(0.72 0.15 145 / 0.12)',
+    title: 'Machine-transcribed from the actual submitted audio (AI4Bharat IndicConformer).',
+  },
   operator_transcript: {
     label: 'Typed narrative',
     icon: '⌨', // keyboard
@@ -22,12 +29,18 @@ const SOURCE_META = {
   },
 };
 
+// Every real (non-operator-typed) ASR provider's source string - kept as an
+// explicit, small whitelist rather than "every SOURCE_META key except
+// operator_transcript" so it's obvious at a glance which sources actually
+// mean "the audio was really transcribed."
+const REAL_ASR_SOURCES = new Set(['whisper_local', 'indic_conformer']);
+
 export default function TranscriptSourceBadge({ source, hasAudio }) {
   const meta = SOURCE_META[source] ?? SOURCE_META.operator_transcript;
   // Audio was attached but nothing about it was actually transcribed - the
   // single most important state to flag, since it looks superficially like
   // "no audio was ever submitted" otherwise.
-  const isUntranscribedAudio = hasAudio && source !== 'whisper_local';
+  const isUntranscribedAudio = hasAudio && !REAL_ASR_SOURCES.has(source);
 
   return (
     <span

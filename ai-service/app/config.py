@@ -20,10 +20,14 @@ class Settings(BaseSettings):
     # architecture decision recorded in server/README.md.
     service_key: str = "dev-insecure-service-key-change-me"
 
-    # Speech-to-text provider: "operator_transcript" (default, no ASR) or
+    # Speech-to-text provider: "operator_transcript" (default, no ASR),
     # "whisper_local" (real faster-whisper transcription - also needs
-    # WHISPER_MODEL_PATH set; see engines/speech_engine.py for what that
-    # accepts and why this isn't the default in every environment).
+    # WHISPER_MODEL_PATH set), or "indic_conformer" (AI4Bharat's Indian-
+    # language-specific ASR via NVIDIA NeMo - needs INDIC_CONFORMER_MODEL_NAME
+    # set, and supports exactly one configured language per deployment via
+    # INDIC_CONFORMER_LANGUAGE). See engines/speech_engine.py for what each
+    # accepts, real tradeoffs between the two ASR options, and why neither
+    # is the default in every environment.
     stt_provider: str = "operator_transcript"
 
     # Optional real-language-understanding signal (see engines/llm_engine.py)

@@ -41,7 +41,7 @@ export default function NlpAnalysis() {
                 {assessment && <TranscriptSourceBadge source={voiceRecording?.transcriptSrc} hasAudio={!!voiceRecording} />}
               </div>
               <div style={{ fontSize: 13, lineHeight: 1.7, color: '#c4c8d4', background: 'rgba(255,255,255,.03)', borderRadius: 10, padding: 16 }}>{analyzedText}</div>
-              {voiceRecording?.transcriptSrc === 'whisper_local' && analyzedText !== complaint.narrative && (
+              {voiceRecording?.transcriptSrc && voiceRecording.transcriptSrc !== 'operator_transcript' && analyzedText !== complaint.narrative && (
                 <div style={{ fontSize: 11, color: '#5c6178', marginTop: 8 }}>
                   This is the machine transcript of the submitted audio, not the complaint's typed narrative field.
                 </div>

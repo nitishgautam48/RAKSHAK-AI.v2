@@ -32,6 +32,16 @@ indic-nlp = [
     "torch>=2.4.0",
 ]
 
+# Separate from indic-nlp above: nemo_toolkit[asr] (for
+# app/engines/speech_engine.py's IndicConformerProvider) is a much heavier,
+# more install-finicky dependency than transformers+torch alone (pulls in
+# pytorch-lightning, hydra-core, sentencepiece, and more). Kept as its own
+# extra so choosing IndicBERT/IndicTrans2 doesn't force this much larger
+# install, and vice versa. Install with `uv sync --extra indic-asr`.
+indic-asr = [
+    "nemo_toolkit[asr]>=2.0.0",
+]
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",

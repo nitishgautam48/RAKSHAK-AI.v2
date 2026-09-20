@@ -258,7 +258,7 @@ model VoiceRecording {
   durationSec   Float?
   languageCode  String?
   transcript    String?
-  transcriptSrc String      @default("operator_entered") // "operator_entered" | "whisper_local" | "victim_typed"
+  transcriptSrc String      @default("operator_entered") // real values actually written are ai-service's TranscriptionResult.source verbatim: "operator_transcript" | "whisper_local" | "indic_conformer" (see ai-service/app/engines/speech_engine.py) - this column's default is never relied on in practice since assessment.service.ts always sets it explicitly on every real write
   createdAt     DateTime    @default(now())
 }
 

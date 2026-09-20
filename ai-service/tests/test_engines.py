@@ -288,6 +288,85 @@ def test_svi_public_access_denial_affects_score_without_flooring_it():
     assert with_signal.band not in ("HIGH", "CRITICAL")
 
 
+def test_nlp_threat_covers_acid_attack_language():
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("They said they will throw acid on me if I go to the police.")
+    assert result.threat_score > baseline.threat_score
+
+
+def test_nlp_threat_future_violence_structural_pattern_covers_stab_and_shoot():
+    # Extends the existing future-violence structural pattern's verb list -
+    # "will stab"/"gonna shoot" are as common as "will kill"/"gonna beat".
+    result = nlp_engine.analyze("he said he is going to shoot me if I testify")
+    assert result.threat_score > 0
+
+
+def test_nlp_retaliation_covers_teach_a_lesson_idiom():
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("The men warned they would teach us a lesson if we complained again.")
+    assert result.threat_score > baseline.threat_score
+
+
+def test_nlp_retaliation_covers_first_person_teach_a_lesson_idiom():
+    # Found live: "teach you/him/her a lesson" was covered but "teach me a
+    # lesson" - the phrasing a victim actually uses about themselves in a
+    # first-person narrative - was missing.
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("They warned they would teach me a lesson if I went to the police.")
+    assert result.threat_score > baseline.threat_score
+
+
+def test_nlp_isolation_covers_separate_utensils_practice():
+    # Separate utensils/seating is one of the most commonly reported forms
+    # of everyday caste-based untouchability practice.
+    result = nlp_engine.analyze("they always give us separate utensils and never let us sit with them")
+    assert result.isolation_score > 0
+
+
+def test_nlp_vulnerability_covers_infant_and_disability_terms():
+    result = nlp_engine.analyze("I have a newborn at home and my mother is mentally ill.")
+    assert result.vulnerability_score > 0
+
+
+def test_nlp_physical_harm_covers_acid_attack_and_burning():
+    baseline = nlp_engine.analyze("I would like to update my address on file.")
+    result = nlp_engine.analyze("They set fire to our hut and I was burned alive trying to save my children.")
+    assert result.trauma_score > baseline.trauma_score
+
+
+def test_nlp_caste_targeting_covers_scheduled_caste_terminology():
+    result = nlp_engine.analyze("They insulted me with a caste slur because I am scheduled caste.")
+    assert result.caste_targeting_score > 0
+
+
+def test_nlp_sexual_violence_covers_gang_rape_terminology():
+    result = nlp_engine.analyze("She was gang raped by four men from the neighboring village.")
+    assert result.sexual_violence_score > 0
+
+
+def test_nlp_digital_harassment_covers_revenge_porn_terminology():
+    result = nlp_engine.analyze("My ex-partner is threatening revenge porn and sextortion against me.")
+    assert result.digital_harassment_score > 0
+
+
+def test_nlp_public_humiliation_covers_shoe_beating():
+    result = nlp_engine.analyze("The old man was beaten with shoes by a mob in front of the whole market.")
+    assert result.public_humiliation_score > 0
+
+
+def test_nlp_public_humiliation_footwear_structural_pattern_does_not_require_exact_phrase():
+    # No literal "forced to remove his footwear" here - only the structural
+    # "forced/made ... to remove/take off ... footwear" construction.
+    result = nlp_engine.analyze("the men made him take off his slippers in front of everyone to humiliate him")
+    assert result.public_humiliation_score > 0
+    assert any(t.startswith("(pattern)") for t in result.matched_keywords)
+
+
+def test_nlp_public_access_denial_covers_denied_service():
+    result = nlp_engine.analyze("The shopkeeper refused service to us because of our caste.")
+    assert result.public_access_denial_score > 0
+
+
 def test_nlp_no_false_positive_substring_match():
     # "white" contains "hit" as a raw substring - a bug found while
     # expanding the evaluation set. Word-boundary-anchored matching should

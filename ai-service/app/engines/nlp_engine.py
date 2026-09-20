@@ -40,7 +40,15 @@ from dataclasses import dataclass, field
 LEXICON: dict[str, list[str]] = {
     "threat": [
         "threat", "threaten", "kill", "murder", "beat", "burn", "attack", "weapon", "gun", "knife", "armed",
-        "dhamki", "jaan se maar", "maar denge", "धमकी", "जान से मार",  # Hindi
+        # More real threat phrasings not covered by the single-verb keywords
+        # above - acid attacks are a specific, well-documented form of caste/
+        # gender-based violence in India, and "finish you off"/"won't let
+        # you live" are common real threat idioms that don't contain any of
+        # the existing keywords. English + Hindi only for this addition.
+        "throw acid", "throwing acid", "acid attack", "stab you", "shoot you", "burn you alive",
+        "burn alive", "finish you off", "won't let you live", "wont let you live",
+        "dhamki", "jaan se maar", "maar denge", "धमकी", "जान से मार",
+        "एसिड फेंकेंगे", "जिंदा जला देंगे", "गोली मार देंगे",  # Hindi
         "जीवे मारण्याची धमकी", "मारून टाकू",  # Marathi
         "হুমকি", "মেরে ফেলব",  # Bengali
         "బెదిరింపు", "చంపేస్తాను", "కొడతాను",  # Telugu
@@ -51,7 +59,14 @@ LEXICON: dict[str, list[str]] = {
     "retaliation": [
         "retaliat", "revenge", "payback", "again if", "will suffer", "consequences", "warn",
         "worse will happen", "something worse",
-        "badla", "बदला", "अंजाम देंगे",  # Hindi
+        # Common real intimidation idioms - a witness/complainant is often
+        # warned this way rather than with an explicit "consequences"-style
+        # phrase. English + Hindi only for this addition.
+        "teach you a lesson", "teach him a lesson", "teach her a lesson",
+        "teach me a lesson", "teach us a lesson",
+        "show you your place", "put you in your place", "make an example of you",
+        "badla", "बदला", "अंजाम देंगे",
+        "सबक सिखाएंगे", "औकात दिखाएंगे",  # Hindi
     ],
     "fear": [
         "afraid", "scared", "terrified", "fear", "frightened", "panic", "unsafe", "dare not", "cannot sleep",
@@ -111,7 +126,17 @@ LEXICON: dict[str, list[str]] = {
         # test narrative ("nobody is there for me...") scored zero on
         # isolation because of this exact gap.
         "nobody", "no one cares", "nobody cares", "nobody helps", "no one to turn to",
-        "akela", "अकेला", "बहिष्कार",  # Hindi
+        # Specific, real caste-based untouchability practices (kept in
+        # isolation, not caste_targeting, since these ARE the social-
+        # exclusion mechanism, not just a caste identifier) - separate
+        # utensils/seating is one of the most commonly reported forms of
+        # everyday discrimination against Dalit households. English + Hindi
+        # only for this addition.
+        "separate utensils", "separate plates", "separate glass", "separate cups",
+        "not allowed to sit with them", "made to sit separately", "treated as untouchable",
+        "excommunicated", "cut off from the village",
+        "akela", "अकेला", "बहिष्कार",
+        "अलग बर्तन", "अलग थाली", "साथ बैठने नहीं दिया", "अछूत माना",  # Hindi
         "एकटा", "एकटी", "बहिष्कार",  # Marathi
         "একা", "বয়কট",  # Bengali
         "ఒంటరిగా", "వెలివేత",  # Telugu
@@ -121,7 +146,11 @@ LEXICON: dict[str, list[str]] = {
     ],
     "vulnerability": [
         "children", "alone at home", "elderly", "disabled", "pregnant", "widow", "single mother",
-        "bachche", "बच्चे",  # Hindi
+        # More compounding-vulnerability factors not covered above. English
+        # + Hindi only for this addition.
+        "newborn", "infant", "mentally ill", "orphan", "blind", "deaf and mute", "chronically ill",
+        "bachche", "बच्चे",
+        "नवजात", "अनाथ", "मानसिक रूप से बीमार",  # Hindi
         "मुले", "वृद्ध",  # Marathi
         "শিশু", "বৃদ্ধ",  # Bengali
         "పిల్లలు", "వృద్ధులు",  # Telugu
@@ -131,6 +160,12 @@ LEXICON: dict[str, list[str]] = {
     ],
     "physical_harm": [
         "hit", "struck", "beaten", "injured", "wound", "bleeding", "hospital", "unconscious", "assault",
+        # More severe physical-assault evidence not covered by the terms
+        # above - acid attacks and burning are specific, well-documented
+        # forms of caste/gender-based violence. English + Hindi only for
+        # this addition.
+        "acid attack", "threw acid on me", "burned alive", "set on fire", "stabbed", "shot",
+        "broken bones", "fracture", "disfigured",
         # Classic post-traumatic symptom language - distinct from the
         # physical-assault evidence above, but folds into the same
         # trauma_score composite (see analyze()'s trauma_score formula) since
@@ -140,7 +175,8 @@ LEXICON: dict[str, list[str]] = {
         "traumatized", "trauma", "ptsd", "post-traumatic stress", "flashbacks", "flashback",
         "nightmares about it", "haunted by", "haunts me", "keeps replaying in my head",
         "relive it every day", "can't forget what happened", "cant forget what happened",
-        "maara", "मारा", "चोट", "सदमा", "मानसिक आघात",  # Hindi
+        "maara", "मारा", "चोट", "सदमा", "मानसिक आघात",
+        "जला दिया", "आग लगा दी", "गोली मारी", "चाकू मारा",  # Hindi
         "मारहाण", "जखम",  # Marathi
         "মারধর", "আঘাত",  # Bengali
         "కొట్టారు", "గాయం",  # Telugu
@@ -150,7 +186,13 @@ LEXICON: dict[str, list[str]] = {
     ],
     "caste_targeting": [
         "caste", "sc/st", "dalit", "untouchab", "land dispute", "do not belong", "temple",
-        "jaati", "जाति",  # Hindi
+        # More specific, real caste-identity/targeting language not covered
+        # by the terms above. English + Hindi only for this addition.
+        "scheduled caste", "scheduled tribe", "backward caste", "upper caste", "lower caste",
+        "caste slur", "casteist remark", "caste-based discrimination", "because of my caste",
+        "because we are dalit",
+        "jaati", "जाति",
+        "अनुसूचित जाति", "अनुसूचित जनजाति", "जातिसूचक", "जाति के आधार पर",  # Hindi
         "जात", "दलित",  # Marathi
         "জাতি", "দলিত",  # Bengali
         "కులం", "దళిత్",  # Telugu
@@ -171,7 +213,12 @@ LEXICON: dict[str, list[str]] = {
         "rape", "raped", "molest", "molested", "molestation", "sexual assault", "sexually assaulted",
         "outraged her modesty", "outrage her modesty",  # IPC Section 354 terminology, real complaint language
         "inappropriately touched", "touched inappropriately",
-        "बलात्कार", "छेड़छाड़", "यौन उत्पीड़न",  # Hindi
+        # Gang rape and attempted rape are legally and narratively distinct
+        # from the terms above (aggravated offence / inchoate offence under
+        # IPC) and complainants frequently use this exact phrasing.
+        "gang rape", "gang raped", "gang-raped", "attempted rape", "tried to rape",
+        "बलात्कार", "छेड़छाड़", "यौन उत्पीड़न",
+        "सामूहिक बलात्कार", "बलात्कार की कोशिश",  # Hindi
     ],
     "custodial_abuse": [
         "custodial death", "died in custody", "custodial torture", "beaten in custody", "police custody",
@@ -206,6 +253,12 @@ LEXICON: dict[str, list[str]] = {
     "digital_harassment": [
         "morphed photo", "morphed image", "cyberbullying", "cyber bullying", "online harassment",
         "leaked my photo", "blackmail", "doxxed", "doxxing", "fake profile", "obscene messages",
+        # More specific, real forms of online abuse not covered above.
+        # English only for this addition - these are recent internet-slang
+        # terms without an established, reliable Hindi equivalent yet;
+        # inventing one would carry more mistranslation risk than leaving
+        # the gap, consistent with this lexicon's grow-as-reviewed policy.
+        "revenge porn", "sextortion", "catfished", "hacked my account", "impersonating me online",
         "फर्जी फोटो", "साइबर उत्पीड़न", "अश्लील संदेश",  # Hindi
     ],
     # manual_scavenging is chronic/structural tier (same as bonded_labor/
@@ -217,6 +270,8 @@ LEXICON: dict[str, list[str]] = {
     "manual_scavenging": [
         "manual scavenging", "manual scavenger", "forced to clean human waste", "forced to clean excreta",
         "cleaning sewers by hand", "cleaning gutters by hand", "forced into the sewer", "clean the toilets by hand",
+        "cleaning dry latrines", "carrying human waste on his head", "carrying human waste on her head",
+        "cleaning septic tanks by hand",
         "मैला ढोना", "सिर पर मैला", "हाथ से मैला",  # Hindi
     ],
     # public_humiliation is immediate-emergency tier (same as sexual_violence/
@@ -233,7 +288,15 @@ LEXICON: dict[str, list[str]] = {
         "garlanded with footwear", "garlanded with shoes", "garlanded with slippers",
         "forced to eat human excreta", "forced to eat excreta", "forced to drink urine",
         "tonsured his head", "tonsured her head", "blackened his face", "blackened her face",
-        "नंगा घुमाया", "जूतों की माला", "मुंह काला किया",  # Hindi
+        # More real forms of public degradation not covered above -
+        # beatings with footwear (a deliberate caste insult distinct from
+        # ordinary physical assault) and forced removal of footwear/spitting
+        # are commonly reported alongside the terms above.
+        "beaten with shoes", "beaten with slippers", "beaten with footwear",
+        "forced to remove his footwear", "forced to remove her footwear", "made to walk barefoot",
+        "spat on him", "spat on her",
+        "नंगा घुमाया", "जूतों की माला", "मुंह काला किया",
+        "जूतों से पीटा",  # Hindi
     ],
     # public_access_denial is chronic/structural tier (same as bonded_labor/
     # land_displacement/digital_harassment/manual_scavenging - a weighted
@@ -248,7 +311,13 @@ LEXICON: dict[str, list[str]] = {
         "denied access to the well", "denied access to the water", "not allowed to draw water",
         "not allowed to fetch water", "barred from the temple", "denied entry to the temple",
         "not allowed to enter the temple", "denied access to the pond", "not allowed to use the common well",
-        "पानी नहीं लेने दिया", "मंदिर में प्रवेश नहीं", "कुएं से पानी नहीं भरने दिया",  # Hindi
+        # Denial of ordinary commercial/public services on the basis of
+        # caste is just as commonly reported as the water/temple-specific
+        # forms above.
+        "denied service", "refused service", "not served at the shop", "denied entry to the shop",
+        "not allowed on the bus",
+        "पानी नहीं लेने दिया", "मंदिर में प्रवेश नहीं", "कुएं से पानी नहीं भरने दिया",
+        "दुकान में सामान नहीं दिया", "बस में बैठने नहीं दिया",  # Hindi
     ],
 }
 
@@ -477,7 +546,7 @@ _SUICIDAL_DONT_WANT_TO_LIVE_RE = re.compile(
 # catches an explicit future-tense threat construction ("will kill", "gonna
 # beat", "going to burn") regardless of which specific violence verb is
 # used, rather than requiring every verb to be pre-listed.
-_THREAT_FUTURE_VIOLENCE_RE = re.compile(r"\b(?:will|gonna|going to)\b(?:\s+\w+){0,3}\s+(?:kill|beat|burn|hurt|harm|attack|rape)\b")
+_THREAT_FUTURE_VIOLENCE_RE = re.compile(r"\b(?:will|gonna|going to)\b(?:\s+\w+){0,3}\s+(?:kill|beat|burn|hurt|harm|attack|rape|stab|shoot)\b")
 
 # Generalizes "sexual_violence" beyond the literal phrase list - "forced
 # himself on her", "forced herself upon him", etc. are common real phrasings
@@ -535,6 +604,13 @@ _PUBLIC_HUMILIATION_FORCED_RE = re.compile(
 # "paraded ... naked" - a common real phrasing not always adjacent
 # ("paraded him through the village naked").
 _PUBLIC_HUMILIATION_PARADED_RE = re.compile(r"\bparaded\b(?:\s+\w+){0,6}\s+naked\b")
+
+# Generalizes the footwear-removal humiliation phrasing beyond the literal
+# "forced to remove his/her footwear" - "made them take off their shoes",
+# "forced him to take off his slippers", etc.
+_PUBLIC_HUMILIATION_FOOTWEAR_RE = re.compile(
+    r"\b(?:forced|made)\b(?:\s+\w+){0,4}\s+(?:remove|take off)\b(?:\s+\w+){0,4}\s+(?:footwear|shoes|slippers|chappal)\b",
+)
 
 # Generalizes "public_access_denial" beyond the literal phrase list - "we
 # were not allowed to take water from the village well", "they refused to
@@ -629,6 +705,7 @@ def analyze(text: str) -> NlpIndicators:
     _apply_structural_pattern(by_cat["manual_scavenging"], _MANUAL_SCAVENGING_FORCED_RE, text_lower, "forced/made ... to clean ... waste/sewer")
     _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_FORCED_RE, text_lower, "forced/made ... to eat/drink ... excreta/urine")
     _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_PARADED_RE, text_lower, "paraded ... naked")
+    _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_FOOTWEAR_RE, text_lower, "forced/made ... to remove/take off ... footwear")
     _apply_structural_pattern(by_cat["public_access_denial"], _PUBLIC_ACCESS_DENIAL_RE, text_lower, "not allowed/refused ... water/well/temple/pond")
     intensifier_boost = 1.0 + 0.1 * sum(1 for i in INTENSIFIERS if i in text_lower)
     # Negation is scanned on the text with matched multi-word lexicon phrases

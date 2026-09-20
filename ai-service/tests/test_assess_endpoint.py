@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from app import main
 from app.engines.speech_engine import SpeechToTextProvider, TranscriptionResult
 from app.engines.semantic_engine import SemanticIndicators
+from app.engines.translation_engine import TranslationResult
 from app.mlops import degradation
 
 SERVICE_KEY_HEADERS = {"X-Service-Key": main.settings.service_key}
@@ -65,6 +66,12 @@ def _isolate_degradation_log(monkeypatch, tmp_path):
     # tests depend on real network conditions/speed. Stubbed to a clean
     # "unavailable, no error" result so it never contributes noise here.
     monkeypatch.setattr(main.semantic_engine, "analyze", lambda text: SemanticIndicators(available=False, error=None))
+    # Same reasoning as the semantic-engine stub above, for the new
+    # translation engine (test_translation_engine.py owns real coverage of
+    # its routing/degradation behavior) - most tests here don't set a
+    # non-lexicon language_hint anyway, so this would already no-op, but
+    # stubbed explicitly so this file's intent stays self-documenting.
+    monkeypatch.setattr(main.translation_engine, "translate_to_english", lambda text, language_hint: TranslationResult(available=False, error=None))
 
 
 def test_default_provider_ignores_audio_and_uses_typed_narrative(client, monkeypatch):

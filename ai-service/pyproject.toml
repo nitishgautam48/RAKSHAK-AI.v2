@@ -20,6 +20,17 @@ dependencies = [
     "fastembed>=0.8.0",
 ]
 
+# Not in core dependencies: opt-in only (ENABLE_INDIC_TRANSLATION), and
+# transformers+torch are real heavy dependencies (order of 1GB+ combined)
+# not needed unless this specific feature is turned on - see
+# app/engines/translation_engine.py's docstring. Install with
+# `uv sync --extra indic-translation`.
+[project.optional-dependencies]
+indic-translation = [
+    "transformers>=4.45.0",
+    "torch>=2.4.0",
+]
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",

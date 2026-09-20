@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # restricted network access.
     disable_semantic_analysis: bool = False
 
+    # Opt-in Indic-to-English translation (see engines/translation_engine.py)
+    # for narratives in languages OUTSIDE the NLP lexicon's 8-language
+    # coverage - needs transformers+torch, a real new dependency not used
+    # anywhere else in this service, so this is off by default like the LLM
+    # engine's key gate, not on-by-default like the semantic engine.
+    enable_indic_translation: bool = False
+
     model_registry_path: str = str(BASE_DIR / "data" / "model_registry.json")
     dataset_registry_path: str = str(BASE_DIR / "data" / "dataset_registry.json")
     eval_results_path: str = str(BASE_DIR / "data" / "eval_results.json")

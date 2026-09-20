@@ -17,6 +17,7 @@ from app.engines import (
     semantic_engine,
     speech_engine,
     svi_engine,
+    translation_engine,
     voice_engine,
 )
 from app.engines.explainability_engine import build as build_explanation
@@ -53,6 +54,15 @@ def register_model_versions() -> None:
         "semantic_understanding",
         semantic_engine.MODEL_NAME,
         {"origin": "embedding_similarity", "categories": semantic_engine.BLENDABLE_CATEGORIES},
+    )
+    registry.register_model_version(
+        "indic_translation",
+        translation_engine.MODEL_NAME if settings.enable_indic_translation else "disabled",
+        {
+            "origin": "translation",
+            "enabled": settings.enable_indic_translation,
+            "lexicon_covered_languages": sorted(translation_engine.LEXICON_COVERED_LANGUAGES),
+        },
     )
 
 
@@ -174,6 +184,34 @@ def assess(body: AssessRequest) -> dict:
     elif semantic_result.error not in (None, "empty_text", "disabled_by_config"):
         degradation.log_degradation("semantic", semantic_result.error.split(":", 1)[0])
 
+    # Opt-in bridge for languages OUTSIDE the lexicon's 8-language coverage
+    # (see translation_engine.py) - translates to English, then re-runs the
+    # already-free semantic engine on the translation so a narrative in e.g.
+    # Punjabi or Gujarati gets a real shot at a paraphrase match instead of
+    # the lexicon finding literally nothing. NOT sent to the LLM engine: that
+    # would double a real per-call API cost for a language Claude can often
+    # already read natively, for an unproven accuracy gain - a deliberately
+    # narrower scope than the semantic-engine re-run. Same max()-only blend
+    # rule as every other additive signal in this pipeline.
+    translation_result = translation_engine.translate_to_english(analysis_text, body.language_hint)
+    if translation_result.available:
+        translated_semantic_result = semantic_engine.analyze(translation_result.translated_text)
+        if translated_semantic_result.available:
+            for category in semantic_engine.BLENDABLE_CATEGORIES:
+                field_name = f"{category}_score"
+                current = getattr(nlp_result, field_name)
+                setattr(nlp_result, field_name, max(current, translated_semantic_result.scores[category]))
+            if translated_semantic_result.suicidal_ideation_similarity >= 70.0:
+                nlp_result.suicidal_ideation_flag = True
+    elif translation_result.error not in (
+        None,
+        "empty_text",
+        "no_language_hint",
+        "lexicon_already_covers_language",
+        "disabled_by_config",
+    ) and not translation_result.error.startswith("unsupported_language:"):
+        degradation.log_degradation("translation", translation_result.error.split(":", 1)[0])
+
     emotion_result = emotion_engine.analyze(nlp_result, voice_result)
 
     svi_inputs = svi_engine.SVIInputs(
@@ -266,6 +304,15 @@ def assess(body: AssessRequest) -> dict:
                     "topMatches": {k: {"phrase": v[0], "similarity": v[1]} for k, v in semantic_result.top_matches.items()},
                 }
                 if semantic_result.available
+                else None
+            ),
+            "indicTranslation": (
+                {
+                    "model": translation_result.model,
+                    "sourceLanguage": translation_result.source_language,
+                    "translatedText": translation_result.translated_text,
+                }
+                if translation_result.available
                 else None
             ),
         },

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.engines import (
+    crisis_triage_engine,
     emotion_engine,
     indic_semantic_engine,
     llm_engine,
@@ -74,6 +75,11 @@ def register_model_versions() -> None:
             "eligible_languages": sorted(indic_semantic_engine.ELIGIBLE_LANGUAGES),
             "caveat": "not fine-tuned for sentence-similarity - unvalidated signal, see module docstring",
         },
+    )
+    registry.register_model_version(
+        "crisis_triage",
+        crisis_triage_engine.MODEL_VERSION,
+        {"origin": "rule_based_decision_tree", "signals": ["emotional_distress", "suicidal_ideation", "threat"]},
     )
 
 
@@ -249,6 +255,13 @@ def assess(body: AssessRequest) -> dict:
 
     emotion_result = emotion_engine.analyze(nlp_result, voice_result)
 
+    # Crisis Triage overlay - see crisis_triage_engine.py's docstring for why
+    # this is a separate, deliberately simple decision tree over exactly
+    # these three signals rather than another input into svi_engine.compute()
+    # below (which would double-count what its own suicidal-ideation floor
+    # and threat weight already do).
+    crisis_triage_result = crisis_triage_engine.assess(nlp_result, emotion_result)
+
     svi_inputs = svi_engine.SVIInputs(
         fear=nlp_result.fear_score,
         trauma=nlp_result.trauma_score,
@@ -380,6 +393,17 @@ def assess(body: AssessRequest) -> dict:
             ),
         },
         "emotion": asdict(emotion_result),
+        "crisisTriage": {
+            "level": crisis_triage_result.level,
+            "score": crisis_triage_result.score,
+            "emotionalDistressScore": crisis_triage_result.emotional_distress_score,
+            "suicidalIdeationFlag": crisis_triage_result.suicidal_ideation_flag,
+            "threatScore": crisis_triage_result.threat_score,
+            "severeSignals": crisis_triage_result.severe_signals,
+            "elevatedSignals": crisis_triage_result.elevated_signals,
+            "reasons": crisis_triage_result.reasons,
+            "modelVersion": crisis_triage_result.model_version,
+        },
         "svi": {
             "value": svi_result.value,
             "band": svi_result.band,

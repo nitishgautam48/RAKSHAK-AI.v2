@@ -68,11 +68,17 @@ export function useLiveTranscription() {
   const streamRef = useRef(null);
   const socketRef = useRef(null);
   const handlerRef = useRef(null);
+  // Exposed directly (not wrapped in React state) so a caller can read real
+  // mic amplitude at animation-frame rate for a waveform visualization
+  // without forcing a re-render 30-60 times a second - see
+  // getWaveformLevels() below.
+  const analyserRef = useRef(null);
 
   const stop = useCallback(() => {
     processorRef.current?.disconnect();
     sourceRef.current?.disconnect();
     silentGainRef.current?.disconnect();
+    analyserRef.current?.disconnect();
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       audioContextRef.current.close().catch(() => {});
     }
@@ -84,9 +90,31 @@ export function useLiveTranscription() {
     processorRef.current = null;
     sourceRef.current = null;
     silentGainRef.current = null;
+    analyserRef.current = null;
     audioContextRef.current = null;
     streamRef.current = null;
     setIsActive(false);
+  }, []);
+
+  // Real (not fabricated) per-band amplitude from the actual mic input,
+  // for a caller-driven waveform animation. Returns null if not currently
+  // active. Deliberately NOT exposed as React state - a caller should poll
+  // this from its own requestAnimationFrame loop and manage its own
+  // (throttled) re-renders, since audio-rate updates would be far too
+  // frequent to put through React state directly.
+  const getWaveformLevels = useCallback((barCount) => {
+    const analyser = analyserRef.current;
+    if (!analyser) return null;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    const bars = new Array(barCount);
+    const bucketSize = Math.floor(data.length / barCount) || 1;
+    for (let i = 0; i < barCount; i++) {
+      let sum = 0;
+      for (let j = 0; j < bucketSize; j++) sum += data[i * bucketSize + j] ?? 0;
+      bars[i] = sum / bucketSize / 255; // normalized 0-1
+    }
+    return bars;
   }, []);
 
   const start = useCallback(async (languageHint) => {
@@ -163,9 +191,17 @@ export function useLiveTranscription() {
     processor.connect(silentGain);
     silentGain.connect(audioContext.destination);
 
+    // Real amplitude data for a waveform visualization - a separate tap off
+    // the same source, not in the processing chain above, so it can't
+    // affect what gets transcribed.
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyserRef.current = analyser;
+    source.connect(analyser);
+
     socket.emit('transcribe:start', { languageHint });
     setIsActive(true);
   }, []);
 
-  return { isActive, segments, partialText, error, start, stop };
+  return { isActive, segments, partialText, error, start, stop, getWaveformLevels };
 }

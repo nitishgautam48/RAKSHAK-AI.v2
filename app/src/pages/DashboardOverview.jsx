@@ -110,8 +110,17 @@ export default function DashboardOverview() {
           <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 16 }}>SVI Trend ({sviTrend.length || 0} weeks with data)</div>
           {trendPoints ? (
             <svg viewBox="0 0 600 160" style={{ width: '100%', height: 160 }}>
-              <polyline points={trendPoints} fill="none" stroke="oklch(0.62 0.16 235)" strokeWidth="3" />
-              <polyline points={trendArea} fill="oklch(0.5 0.14 235 / 0.12)" stroke="none" />
+              <defs>
+                <linearGradient id="sviTrendFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="oklch(0.62 0.16 235)" stopOpacity="0.45" />
+                  <stop offset="100%" stopColor="oklch(0.62 0.16 235)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="15" x2="600" y2="15" stroke="rgba(255,255,255,.06)" strokeWidth="1" />
+              <line x1="0" y1="80" x2="600" y2="80" stroke="rgba(255,255,255,.06)" strokeWidth="1" />
+              <line x1="0" y1="145" x2="600" y2="145" stroke="rgba(255,255,255,.06)" strokeWidth="1" />
+              <polyline points={trendArea} fill="url(#sviTrendFill)" stroke="none" />
+              <polyline points={trendPoints} fill="none" stroke="oklch(0.62 0.16 235)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           ) : singleTrendPoint ? (
             <svg viewBox="0 0 600 160" style={{ width: '100%', height: 160 }}>

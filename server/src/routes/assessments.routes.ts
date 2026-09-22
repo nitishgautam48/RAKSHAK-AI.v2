@@ -15,6 +15,19 @@ import { RoleName } from '@prisma/client';
 export const assessmentsRouter = Router();
 assessmentsRouter.use(requireAuth);
 
+// Extracted as a pure, exported function (not inlined in the route handler)
+// specifically so the exact bug this fixes - a filter param silently
+// accepted by callers but never applied - has a real regression test rather
+// than only having been caught by manual live verification. See
+// __tests__/assessmentsFilter.test.ts.
+export function buildAssessmentListWhere(params: { victimId?: string; caseId?: string; complaintId?: string }) {
+  return {
+    ...(params.victimId ? { victimId: params.victimId } : {}),
+    ...(params.caseId ? { caseId: params.caseId } : {}),
+    ...(params.complaintId ? { complaintId: params.complaintId } : {}),
+  };
+}
+
 const assessSchema = z.object({
   victimId: z.string().min(1),
   complaintId: z.string().optional(),
@@ -83,10 +96,21 @@ assessmentsRouter.post('/', asyncHandler(async (req, res) => {
 }));
 
 assessmentsRouter.get('/', asyncHandler(async (req, res) => {
-  const victimId = qStr(req, 'victimId');
-  const caseId = qStr(req, 'caseId');
+  // complaintId was accepted by every caller (see app/src/lib/
+  // useAssessmentSelector.js) but silently ignored here - a real bug: with
+  // no filter applied at all, this returned the single most-recently-
+  // created assessment SYSTEM-WIDE regardless of which complaint was
+  // actually requested, so every "assessment for this complaint" page
+  // (Victim Assessment, Voice Analysis, NLP Analysis, Explainable AI) could
+  // show a completely unrelated complaint's stale result - looking exactly
+  // like "the score never changes no matter what I submit."
+  const where = buildAssessmentListWhere({
+    victimId: qStr(req, 'victimId'),
+    caseId: qStr(req, 'caseId'),
+    complaintId: qStr(req, 'complaintId'),
+  });
   const items = await prisma.assessment.findMany({
-    where: { ...(victimId ? { victimId } : {}), ...(caseId ? { caseId } : {}) },
+    where,
     orderBy: { createdAt: 'desc' },
     include: { sviScore: true, riskScore: true, emotionScore: true },
   });

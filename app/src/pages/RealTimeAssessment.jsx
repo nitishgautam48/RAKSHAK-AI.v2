@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import TranscriptSourceBadge from '../components/TranscriptSourceBadge';
+import { useLiveTranscription } from '../lib/useLiveTranscription';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 20 };
 // Keyed to the backend's RiskLevel enum (LOW/MODERATE/HIGH/CRITICAL), not
@@ -16,6 +17,38 @@ export default function RealTimeAssessment() {
   const [result, setResult] = useState(null);
   const [audioFile, setAudioFile] = useState(null);
   const [audioBase64, setAudioBase64] = useState(null);
+
+  const live = useLiveTranscription();
+  const appendedSegmentCount = useRef(0);
+
+  // Append each newly finalized segment onto the narrative as it arrives -
+  // this is what makes it "live": the operator sees real spoken words land
+  // in the narrative a few seconds after being said, not only once the
+  // whole call ends. The in-progress (not-yet-finalized) partial is shown
+  // separately below rather than written into the textarea, since it can
+  // still be revised before it finalizes.
+  useEffect(() => {
+    if (live.segments.length <= appendedSegmentCount.current) return;
+    const newText = live.segments.slice(appendedSegmentCount.current).join(' ');
+    appendedSegmentCount.current = live.segments.length;
+    setNarrative((prev) => (prev.trim() ? `${prev.trim()} ${newText}` : newText));
+  }, [live.segments]);
+
+  const toggleLiveTranscription = () => {
+    if (live.isActive) {
+      live.stop();
+    } else {
+      appendedSegmentCount.current = 0;
+      live.start();
+    }
+  };
+
+  // Release the mic if the operator navigates away mid-session, rather
+  // than leaving it open in the background. Deliberately mount/unmount-only
+  // (live.stop is a stable useCallback ref) - see FileComplaint.jsx's
+  // identical pattern for its own mic-cleanup effect.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => live.stop(), []);
 
   useEffect(() => {
     api.get('/api/complaints?pageSize=50')
@@ -91,6 +124,34 @@ export default function RealTimeAssessment() {
           placeholder="Victim narrative / call transcript..."
           style={{ width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', color: '#eef0f6', borderRadius: 10, padding: 12, fontSize: 13, lineHeight: 1.6, resize: 'vertical' }}
         />
+        {live.partialText && (
+          <div style={{ marginTop: 6, fontSize: 12.5, color: '#8b91a3', fontStyle: 'italic' }}>
+            {live.partialText}…
+          </div>
+        )}
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={toggleLiveTranscription}
+            style={{
+              padding: '7px 14px', borderRadius: 7, border: live.isActive ? '1px solid oklch(0.7 0.17 55 / 0.5)' : '1px solid rgba(255,255,255,.15)',
+              background: live.isActive ? 'oklch(0.7 0.17 55 / 0.15)' : 'rgba(255,255,255,.06)',
+              color: live.isActive ? 'oklch(0.78 0.15 55)' : '#eef0f6', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+            }}
+          >
+            {live.isActive ? '⏹ Stop Live Transcription' : '🎙 Start Live Transcription'}
+          </button>
+          {live.isActive && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#8b91a3' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'oklch(0.62 0.21 25)' }} className="tsa-pulse-dot" />
+              Listening - speech appears in the narrative above as it is transcribed
+            </span>
+          )}
+          {live.error && (
+            <span style={{ fontSize: 11.5, color: 'oklch(0.75 0.15 55)' }}>
+              ⚠ {live.error}
+            </span>
+          )}
+        </div>
         <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <label style={{ fontSize: 12, color: '#8b91a3' }}>
             Optional audio (WAV/FLAC/OGG - real pitch/energy/pause DSP, no model download needed):

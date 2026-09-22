@@ -7,6 +7,35 @@ import type { AuthTokenPayload } from '../middleware/auth.js';
 
 let io: Server | undefined;
 
+// Live (near-real-time, segmented) transcription proxy - see ai-service's
+// app/engines/streaming_transcription.py module docstring for exactly what
+// "near-real-time" honestly means and why. A browser WebSocket client
+// cannot set arbitrary headers, so it cannot authenticate directly against
+// ai-service's X-Service-Key-gated /v1/stream-transcribe endpoint the way a
+// normal REST call does - instead, the browser streams audio over this
+// already-JWT-authenticated Socket.IO connection, and THIS server (which
+// can set arbitrary headers on an outbound connection, same as every other
+// ai-service call in ai.service.ts) opens and owns the actual WebSocket to
+// ai-service, proxying bytes and events in both directions. One ai-service
+// connection per browser socket that has an active live-transcription
+// session, torn down on transcribe:stop or on the browser socket
+// disconnecting - never left open past its session.
+function aiServiceStreamUrl(languageHint?: string): string {
+  const wsBase = env.aiServiceUrl.replace(/^http/, 'ws');
+  const url = new URL(`${wsBase}/v1/stream-transcribe`);
+  if (languageHint) url.searchParams.set('language_hint', languageHint);
+  return url.toString();
+}
+
+function closeUpstream(socket: Socket): void {
+  const upstream = socket.data.transcribeSocket as WebSocket | undefined;
+  if (!upstream) return;
+  socket.data.transcribeSocket = undefined;
+  if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
+    upstream.close();
+  }
+}
+
 export function initSocket(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: { origin: env.corsOrigins, credentials: true },
@@ -39,7 +68,52 @@ export function initSocket(httpServer: HttpServer): Server {
       if (typeof caseId === 'string') socket.leave(`case:${caseId}`);
     });
 
+    socket.on('transcribe:start', (opts: { languageHint?: string } = {}) => {
+      // Guard against a client emitting start twice without an intervening
+      // stop - close whatever's already open first rather than leaking a
+      // second upstream connection.
+      closeUpstream(socket);
+
+      const upstream = new WebSocket(aiServiceStreamUrl(opts?.languageHint), {
+        headers: { 'X-Service-Key': env.aiServiceKey },
+      } as never); // Node's built-in WebSocket client accepts a headers option at runtime; the ws-standard lib.dom types don't model it, hence the cast rather than pulling in a separate client library.
+      socket.data.transcribeSocket = upstream;
+
+      upstream.addEventListener('open', () => {
+        socket.emit('transcribe:ready');
+      });
+      upstream.addEventListener('message', (event) => {
+        // ai-service sends JSON text frames ({"type": "partial"|"final"|"error", ...})
+        try {
+          const payload = JSON.parse(event.data.toString());
+          socket.emit('transcribe:event', payload);
+        } catch {
+          // Malformed frame from ai-service - drop it rather than crash the
+          // socket; the live session simply misses one update.
+        }
+      });
+      upstream.addEventListener('error', () => {
+        socket.emit('transcribe:event', { type: 'error', message: 'Lost connection to the AI service.' });
+      });
+      upstream.addEventListener('close', () => {
+        if (socket.data.transcribeSocket === upstream) socket.data.transcribeSocket = undefined;
+      });
+    });
+
+    socket.on('transcribe:audio', (chunk: ArrayBuffer | Buffer) => {
+      const upstream = socket.data.transcribeSocket as WebSocket | undefined;
+      if (!upstream || upstream.readyState !== WebSocket.OPEN) return;
+      // Buffer (Node/Socket.IO's real runtime type for a binary payload) and
+      // ArrayBuffer both work directly as WebSocket.send() payloads.
+      upstream.send(chunk as never);
+    });
+
+    socket.on('transcribe:stop', () => {
+      closeUpstream(socket);
+    });
+
     socket.on('disconnect', () => {
+      closeUpstream(socket);
       logger.debug('socket disconnected', { userId: user.sub });
     });
   });

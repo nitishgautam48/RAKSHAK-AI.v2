@@ -5,7 +5,7 @@ import time
 from dataclasses import asdict
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
@@ -18,6 +18,7 @@ from app.engines import (
     recommendation_engine,
     semantic_engine,
     speech_engine,
+    streaming_transcription,
     svi_engine,
     translation_engine,
     voice_engine,
@@ -80,6 +81,21 @@ def register_model_versions() -> None:
         "crisis_triage",
         crisis_triage_engine.MODEL_VERSION,
         {"origin": "rule_based_decision_tree", "signals": ["emotional_distress", "suicidal_ideation", "threat"]},
+    )
+    # Reports configuration presence only, not whether the model actually
+    # loads successfully - loading eagerly at startup here would risk
+    # crashing the whole service's startup over a live-transcription-only
+    # misconfiguration. The /v1/stream-transcribe endpoint itself loads (and
+    # reports TranscriberUnavailable) lazily, on first real connection, same
+    # as every other real-model engine in this service.
+    registry.register_model_version(
+        "streaming_transcription",
+        "whisper_local (segmented)" if settings.stt_provider == "whisper_local" else "disabled",
+        {
+            "origin": "asr_segmented_streaming",
+            "enabled": settings.stt_provider == "whisper_local",
+            "caveat": "segment-by-segment near-real-time, not literal word-by-word streaming - see streaming_transcription.py module docstring",
+        },
     )
 
 
@@ -422,6 +438,96 @@ def assess(body: AssessRequest) -> dict:
         },
         "latencyMs": latency_ms,
     }
+
+
+@app.websocket("/v1/stream-transcribe")
+async def stream_transcribe(websocket: WebSocket) -> None:
+    """Near-real-time segmented transcription over a live audio stream -
+    see streaming_transcription.py's module docstring for exactly what
+    "near-real-time" honestly means here (segment-by-segment, not literal
+    word-by-word streaming) and why (faster-whisper has no incremental
+    decoding API).
+
+    AUTHENTICATION: WebSocket handshakes cannot carry the browser's own
+    auth the way a REST call does (a browser WebSocket client cannot set
+    arbitrary headers), so this endpoint is never called directly by the
+    browser - only server-to-server, by the Node gateway, which CAN set
+    X-Service-Key on the handshake request exactly like every REST call
+    here. The browser talks to Node's own (JWT-authenticated) Socket.IO
+    layer, which proxies audio bytes to this endpoint - see
+    server/src/services/socket.service.ts's transcribe:* handlers. Checked
+    before accept() so an unauthorized connection is refused at the
+    handshake, not accepted and then torn down.
+
+    PROTOCOL: client sends raw 16-bit signed little-endian mono PCM audio
+    at streaming_transcription.SAMPLE_RATE (16kHz) as binary WebSocket
+    frames, in any chunk size: this endpoint buffers by content, not by
+    frame boundaries, so the caller does not need to chunk audio to any
+    particular duration. Optional `language_hint` query param, same meaning
+    as /v1/assess's. Server sends back JSON text frames
+    {"type": "partial"|"final", "text": str, "segmentIndex": int} as
+    segments are transcribed - see streaming_transcription.StreamingSegmenter
+    for exactly when each fires. On disconnect, whatever's left in the
+    current segment's buffer is flushed and transcribed one last time
+    (unless empty) before the connection fully closes.
+    """
+    if websocket.headers.get("x-service-key") != settings.service_key:
+        await websocket.close(code=4401)
+        return
+
+    await websocket.accept()
+
+    try:
+        model = streaming_transcription.get_shared_model()
+    except streaming_transcription.TranscriberUnavailable as e:
+        await websocket.send_json({"type": "error", "message": str(e)})
+        await websocket.close(code=4404)
+        return
+
+    language_hint = websocket.query_params.get("language_hint")
+
+    def transcribe_fn(pcm_bytes: bytes, lang_hint: str | None) -> str:
+        # faster-whisper's transcribe() takes a file-like/path, not raw PCM
+        # bytes directly - wrapping in an in-memory WAV container is the
+        # cheapest way to hand it valid audio without touching disk.
+        import io
+        import wave
+
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(streaming_transcription.BYTES_PER_SAMPLE)
+            w.setframerate(streaming_transcription.SAMPLE_RATE)
+            w.writeframes(pcm_bytes)
+        buf.seek(0)
+        segments, _info = model.transcribe(buf, language=lang_hint)
+        return " ".join(s.text.strip() for s in segments)
+
+    segmenter = streaming_transcription.StreamingSegmenter(transcribe_fn, language_hint)
+
+    async def send_events(events: list[streaming_transcription.TranscriptEvent]) -> None:
+        for event in events:
+            await websocket.send_json({"type": event.type, "text": event.text, "segmentIndex": event.segment_index})
+
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            # transcribe_fn is a blocking, CPU-bound faster-whisper call -
+            # run it off the event loop so one live-transcription connection
+            # cannot stall every other request this process is handling.
+            import asyncio
+
+            events = await asyncio.to_thread(segmenter.push_audio, data)
+            await send_events(events)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        final_event = segmenter.flush()
+        if final_event:
+            try:
+                await websocket.send_json({"type": final_event.type, "text": final_event.text, "segmentIndex": final_event.segment_index})
+            except Exception:  # noqa: BLE001 - the client may already be gone; flushing a trailing segment must never raise out of a connection-teardown path
+                pass
 
 
 @app.get("/v1/mlops/registry", dependencies=[Depends(require_service_key)])

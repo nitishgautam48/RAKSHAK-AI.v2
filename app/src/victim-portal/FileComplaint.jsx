@@ -117,13 +117,32 @@ export default function FileComplaint() {
       // from live recording or a file upload, it's normalized to WAV first
       // (see audioToWav.js) - the backend's decoder doesn't support the
       // webm/opus browsers record in, or phone voice-memo formats like m4a.
-      const audioBase64 = audioBlob ? await blobToWavBase64(audioBlob).catch(() => undefined) : undefined;
+      //
+      // Both failure points below used to fail completely silently (bare
+      // .catch(() => {})) - a real bug: a consent gate (428), a WAV
+      // conversion failure, or any AI-service outage all looked identical
+      // to "everything worked" from here, with no assessment/transcript
+      // ever created and no way for the survivor or staff to know why one
+      // never appeared. Still non-blocking (the complaint itself must not
+      // fail because of this), but now logged and surfaced as a soft,
+      // non-alarming notice rather than swallowed outright.
+      let assessmentFailed = false;
+      const audioBase64 = audioBlob
+        ? await blobToWavBase64(audioBlob).catch((err) => {
+            console.error('Voice message could not be converted to WAV for AI assessment:', err);
+            assessmentFailed = true;
+            return undefined;
+          })
+        : undefined;
       await api.post('/api/assessments', {
         victimId: complaint.victimId,
         complaintId: complaint.id,
         narrative: narrativeToSend,
         audioBase64,
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('Automatic AI assessment failed for this complaint:', err);
+        assessmentFailed = true;
+      });
 
       if (docFile) {
         const form = new FormData();
@@ -135,7 +154,7 @@ export default function FileComplaint() {
         await api.postForm('/api/documents', form).catch(() => {});
       }
 
-      setResult({ ...complaint, linkedToExistingCase });
+      setResult({ ...complaint, linkedToExistingCase, assessmentFailed });
       setNarrative('');
       discardRecording();
       setDocFile(null);
@@ -233,6 +252,11 @@ export default function FileComplaint() {
           {result.linkedToExistingCase
             ? `Your complaint (${result.code}) has been added to your existing open case, so your officer sees the full picture. A counsellor will reach out to you shortly. You are not alone.`
             : `Your complaint (${result.code}) has been received. A counsellor will reach out to you shortly. You are not alone.`}
+          {result.assessmentFailed && (
+            <div style={{ marginTop: 8, fontSize: 12, color: 'oklch(0.85 0.1 145 / 0.8)' }}>
+              Your complaint is safely filed and will be reviewed by staff either way - the automatic AI risk analysis just couldn't complete right now and may be retried by staff.
+            </div>
+          )}
         </div>
       )}
 

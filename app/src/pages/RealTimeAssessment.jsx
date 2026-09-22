@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import TranscriptSourceBadge from '../components/TranscriptSourceBadge';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 20 };
 // Keyed to the backend's RiskLevel enum (LOW/MODERATE/HIGH/CRITICAL), not
@@ -102,6 +103,23 @@ export default function RealTimeAssessment() {
 
       {svi && (
         <>
+          {result.transcript && (
+            <div style={{ ...card, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ font: '600 14px Sora,sans-serif' }}>Transcript</div>
+                <TranscriptSourceBadge source={result.transcript.source} hasAudio={result.audioReceived} />
+              </div>
+              <div style={{ fontSize: 13, color: '#c4c8d4', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {result.transcript.transcript || <span style={{ color: '#7d8399', fontStyle: 'italic' }}>(empty transcript)</span>}
+              </div>
+              {result.transcript.language_detected && result.transcript.language_detected !== 'unknown' && (
+                <div style={{ marginTop: 8, fontSize: 11, color: '#7d8399' }}>
+                  Language detected: {result.transcript.language_detected} &middot; Confidence {result.transcript.confidence}%
+                </div>
+              )}
+            </div>
+          )}
+
           {svi.requiresPriorityReview && (
             <div style={{ ...card, marginBottom: 16, border: '1px solid oklch(0.7 0.17 55 / 0.4)', background: 'oklch(0.7 0.17 55 / 0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ font: '700 13px Sora,sans-serif', color: 'oklch(0.78 0.15 55)' }}>🚩 PRIORITY REVIEW</div>

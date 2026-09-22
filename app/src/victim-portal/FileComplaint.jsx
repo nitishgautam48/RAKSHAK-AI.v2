@@ -102,7 +102,7 @@ export default function FileComplaint() {
     setSubmitting(true);
     setError('');
     try {
-      const { complaint, linkedToExistingCase } = await api.post('/api/complaints', {
+      const { complaint, case: newCase, linkedToExistingCase } = await api.post('/api/complaints', {
         incidentType,
         narrative: narrativeToSend,
         channel: 'portal',
@@ -137,6 +137,7 @@ export default function FileComplaint() {
       await api.post('/api/assessments', {
         victimId: complaint.victimId,
         complaintId: complaint.id,
+        caseId: newCase?.id,
         narrative: narrativeToSend,
         audioBase64,
       }).catch((err) => {

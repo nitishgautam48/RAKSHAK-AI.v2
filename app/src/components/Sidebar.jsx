@@ -2,9 +2,12 @@ import Hoverable from './Hoverable';
 import BrandMark from './BrandMark';
 import { NAV } from '../data/constants';
 
-export default function Sidebar({ page, onSelectPage, onExit }) {
+export default function Sidebar({ page, onSelectPage, onExit, mobileOpen, onCloseMobile }) {
   return (
-    <div style={{ width: 272, flex: 'none', background: '#0a0c12', borderRight: '1px solid rgba(255,255,255,.06)', display: 'flex', flexDirection: 'column' }}>
+    <div
+      className={`tsa-sidebar${mobileOpen ? ' tsa-sidebar-open' : ''}`}
+      style={{ width: 272, flex: 'none', background: '#0a0c12', borderRight: '1px solid rgba(255,255,255,.06)', display: 'flex', flexDirection: 'column' }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 18px', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
         <BrandMark size={30} radius={8} />
         <div style={{ font: '700 15px Sora,sans-serif' }}>TraumaSense</div>
@@ -16,7 +19,7 @@ export default function Sidebar({ page, onSelectPage, onExit }) {
           return (
             <Hoverable
               key={item.key}
-              onClick={() => onSelectPage(item.key)}
+              onClick={() => { onSelectPage(item.key); onCloseMobile?.(); }}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 2,
                 color: active ? '#eef0f6' : '#9096a8', background: active ? 'rgba(255,255,255,.06)' : 'transparent',

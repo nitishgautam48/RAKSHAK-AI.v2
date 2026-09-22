@@ -7,6 +7,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
     <div style={{ minHeight: '100vh', background: '#0a0c12' }}>
       {/* NAV */}
       <div
+        className="tsa-nav-row"
         style={{
           position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           gap: 16, flexWrap: 'wrap', padding: '18px 48px', background: 'rgba(10,12,18,.75)', backdropFilter: 'blur(16px)',
@@ -17,7 +18,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
           <BrandMark />
           <div style={{ font: '700 17px Sora,sans-serif', letterSpacing: '.2px' }}>TraumaSense <span style={{ color: 'oklch(0.72 0.14 235)' }}>AI</span></div>
         </div>
-        <div className="tsa-navlinks" style={{ display: 'flex', gap: 18, fontSize: 13.5, color: '#aab0c0', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div className="tsa-navlinks tsa-nav-links" style={{ display: 'flex', gap: 18, fontSize: 13.5, color: '#aab0c0', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <a href="#mission" style={{ color: '#aab0c0' }}>Mission</a>
           <a href="#features" style={{ color: '#aab0c0' }}>Features</a>
           <a href="#workflow" style={{ color: '#aab0c0' }}>How it works</a>
@@ -35,18 +36,18 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* HERO */}
-      <div style={{ position: 'relative', padding: '96px 48px 80px', maxWidth: 1360, margin: '0 auto', display: 'grid', gridTemplateColumns: '1.1fr .9fr', gap: 56, alignItems: 'center' }}>
-        <div style={{ position: 'absolute', top: -120, right: -180, width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,oklch(0.4 0.15 275 / 0.35),transparent 70%)', filter: 'blur(20px)', pointerEvents: 'none' }} />
+      <div className="tsa-hero-grid" style={{ position: 'relative', padding: '96px 48px 80px', maxWidth: 1360, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, alignItems: 'stretch' }}>
+        <div className="tsa-hero-orb" style={{ position: 'absolute', top: -120, right: -180, width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle,oklch(0.4 0.15 275 / 0.35),transparent 70%)', filter: 'blur(20px)', pointerEvents: 'none' }} />
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 20, background: 'rgba(255,255,255,.06)', border: '1px solid rgba(255,255,255,.1)', fontSize: 12.5, color: 'oklch(0.78 0.12 200)', marginBottom: 24 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'oklch(0.72 0.15 145)', animation: 'pulse 2s infinite' }} />
             National Helpline Against Atrocities · 14566
           </div>
-          <h1 style={{ font: '800 52px/1.12 Sora,sans-serif', margin: '0 0 22px', letterSpacing: '-.5px' }}>AI-Powered Trauma Detection for Victim Protection and Early Intervention</h1>
+          <h1 className="tsa-hero-title" style={{ font: '800 44px/1.18 Sora,sans-serif', margin: '0 0 20px', letterSpacing: '-.5px' }}>AI-Powered Trauma Detection for Victim Protection and Early Intervention</h1>
           <p style={{ fontSize: 17, lineHeight: 1.65, color: '#aab0c0', maxWidth: 560, margin: '0 0 32px' }}>
             TraumaSense AI supports the Department of Social Justice and Empowerment, State Governments, law enforcement, counsellors, and rehabilitation authorities in assessing the psychological stress, trauma, fear, and vulnerability of SC/ST victims and complainants &mdash; using speech analytics, NLP, and emotion recognition to generate a Stress Vulnerability Index (SVI) and guide timely intervention.
           </p>
-          <div style={{ display: 'flex', gap: 14 }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             <Hoverable
               as="button"
               onClick={onEnterPlatform}
@@ -64,35 +65,99 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
               See how it works
             </Hoverable>
           </div>
-          <div style={{ display: 'flex', gap: 36, marginTop: 44 }}>
+          <div className="tsa-hero-stats" style={{ display: 'flex', gap: 36, marginTop: 44 }}>
             <div><div style={{ font: '700 26px Sora,sans-serif' }}>10</div><div style={{ fontSize: 12.5, color: '#7d8399' }}>Indian languages supported</div></div>
             <div><div style={{ font: '700 26px Sora,sans-serif' }}>24/7</div><div style={{ fontSize: 12.5, color: '#7d8399' }}>Helpline &amp; response desk</div></div>
             <div><div style={{ font: '700 26px Sora,sans-serif' }}>5</div><div style={{ fontSize: 12.5, color: '#7d8399' }}>Role-based command views</div></div>
           </div>
+          <div style={{ marginTop: 32, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.08)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <svg viewBox="0 0 24 24" width="15" height="15" style={{ marginTop: 2, flexShrink: 0 }} fill="none" stroke="oklch(0.65 0.1 235)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l8 4v6c0 5.5-3.5 8.5-8 10-4.5-1.5-8-4.5-8-10V6l8-4z" /></svg>
+            <div style={{ fontSize: 12.5, color: '#5c6178', lineHeight: 1.6 }}>Deployed in pilot states in consultation with the Department of Social Justice &amp; Empowerment and survivor advocacy groups.</div>
+          </div>
         </div>
-        <div style={{ position: 'relative', zIndex: 1, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 18, padding: 22, backdropFilter: 'blur(20px)', boxShadow: '0 30px 60px -20px rgba(0,0,0,.6)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ font: '600 13px Sora,sans-serif', color: '#aab0c0' }}>Live Stress Vulnerability Index</div>
-            <div style={{ fontSize: 11, color: '#7d8399' }}>Updated 2 min ago</div>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ background: 'linear-gradient(160deg,rgba(255,255,255,.055),rgba(255,255,255,.025))', border: '1px solid rgba(255,255,255,.1)', borderRadius: 20, padding: 26, backdropFilter: 'blur(20px)', boxShadow: '0 30px 70px -20px rgba(0,0,0,.65), inset 0 1px 0 rgba(255,255,255,.06)' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.08)', font: "600 10.5px 'IBM Plex Mono',monospace", letterSpacing: '.6px', color: 'oklch(0.7 0.13 200)', marginBottom: 16 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'oklch(0.7 0.13 200)' }} />NATIONAL SVI MONITOR
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <div style={{ font: '600 13px Sora,sans-serif', color: '#aab0c0', letterSpacing: '.3px' }}>Live Stress Vulnerability Index</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#7d8399' }}>
+                <div className="tsa-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'oklch(0.7 0.17 55)' }} />Updated 2 min ago
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+              <div style={{ font: '800 48px Sora,sans-serif', color: 'oklch(0.7 0.17 55)', textShadow: '0 0 30px oklch(0.7 0.17 55 / 0.4)' }}>68.4</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'oklch(0.7 0.17 55)', background: 'oklch(0.7 0.17 55 / 0.12)', border: '1px solid oklch(0.7 0.17 55 / 0.3)', padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap' }}>High Risk band</div>
+            </div>
+            <div style={{ fontSize: 11.5, color: '#5c6178', marginBottom: 14 }}>National average across all active cases</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ fontSize: 10.5, color: '#5c6178', letterSpacing: '.3px', whiteSpace: 'nowrap' }}>12-WEEK TREND</div>
+              <div style={{ fontSize: 10.5, color: 'oklch(0.7 0.17 55)', fontWeight: 600, whiteSpace: 'nowrap' }}>▲ 6.2% vs last month</div>
+            </div>
+            <svg viewBox="0 0 300 70" style={{ width: '100%', height: 70, display: 'block' }}>
+              <defs>
+                <linearGradient id="sviHeroFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="oklch(0.7 0.17 55)" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="oklch(0.7 0.17 55)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="15" x2="300" y2="15" stroke="rgba(255,255,255,.06)" strokeWidth="1" />
+              <line x1="0" y1="35" x2="300" y2="35" stroke="rgba(255,255,255,.06)" strokeWidth="1" />
+              <line x1="0" y1="55" x2="300" y2="55" stroke="rgba(255,255,255,.06)" strokeWidth="1" />
+              <polygon points="0,50 30,44 60,48 90,32 120,38 150,22 180,28 210,14 240,20 270,10 300,16 300,70 0,70" fill="url(#sviHeroFill)" />
+              <polyline points="0,50 30,44 60,48 90,32 120,38 150,22 180,28 210,14 240,20 270,10 300,16" fill="none" stroke="oklch(0.65 0.16 55)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="300" cy="16" r="5" fill="oklch(0.12 0.02 55)" stroke="oklch(0.75 0.18 55)" strokeWidth="2" />
+              <circle cx="300" cy="16" r="8" fill="oklch(0.7 0.17 55 / 0.25)" />
+            </svg>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#5c6178', marginTop: 4 }}><div>Week 1</div><div>Week 6</div><div>Week 12</div></div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginTop: 20 }}>
+              <div className="tsa-card-hover" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                <div style={{ font: '700 19px Sora,sans-serif', color: 'oklch(0.72 0.15 145)' }}>312</div><div style={{ fontSize: 10.5, color: '#7d8399', marginBottom: 8 }}>Low</div>
+                <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,.06)' }}><div style={{ height: '100%', width: '56%', borderRadius: 2, background: 'oklch(0.72 0.15 145)' }} /></div>
+              </div>
+              <div className="tsa-card-hover" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                <div style={{ font: '700 19px Sora,sans-serif', color: 'oklch(0.8 0.15 95)' }}>184</div><div style={{ fontSize: 10.5, color: '#7d8399', marginBottom: 8 }}>Moderate</div>
+                <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,.06)' }}><div style={{ height: '100%', width: '33%', borderRadius: 2, background: 'oklch(0.8 0.15 95)' }} /></div>
+              </div>
+              <div className="tsa-card-hover" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                <div style={{ font: '700 19px Sora,sans-serif', color: 'oklch(0.7 0.17 55)' }}>96</div><div style={{ fontSize: 10.5, color: '#7d8399', marginBottom: 8 }}>High</div>
+                <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,.06)' }}><div style={{ height: '100%', width: '17%', borderRadius: 2, background: 'oklch(0.7 0.17 55)' }} /></div>
+              </div>
+              <div className="tsa-card-hover" style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 10, padding: '12px 10px', textAlign: 'center' }}>
+                <div style={{ font: '700 19px Sora,sans-serif', color: 'oklch(0.62 0.21 25)' }}>27</div><div style={{ fontSize: 10.5, color: '#7d8399', marginBottom: 8 }}>Critical</div>
+                <div style={{ height: 3, borderRadius: 2, background: 'rgba(255,255,255,.06)' }}><div style={{ height: '100%', width: '5%', borderRadius: 2, background: 'oklch(0.62 0.21 25)' }} /></div>
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 18 }}>
-            <div style={{ font: '800 44px Sora,sans-serif', color: 'oklch(0.7 0.17 55)' }}>68.4</div>
-            <div style={{ fontSize: 13, color: 'oklch(0.7 0.17 55)' }}>High Risk band</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 18px', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: '16px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#aab0c0' }}><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="oklch(0.72 0.15 145)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l8 4v6c0 5.5-3.5 8.5-8 10-4.5-1.5-8-4.5-8-10V6l8-4z" /></svg>End-to-end encrypted</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#aab0c0' }}><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="oklch(0.72 0.14 235)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M4 21V9l8-5 8 5v12M9 21v-6h6v6" /></svg>NIC / MeitY empanelled</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: '#aab0c0' }}><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="oklch(0.8 0.15 95)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 3v18M3 12h18" /></svg>Data hosted in India</div>
           </div>
-          <svg viewBox="0 0 300 70" style={{ width: '100%', height: 70, display: 'block' }}>
-            <polyline points="0,50 30,44 60,48 90,32 120,38 150,22 180,28 210,14 240,20 270,10 300,16" fill="none" stroke="oklch(0.65 0.16 55)" strokeWidth="2.5" />
-          </svg>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginTop: 20 }}>
-            <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 8, padding: 10, textAlign: 'center' }}><div style={{ font: '700 18px Sora,sans-serif', color: 'oklch(0.72 0.15 145)' }}>312</div><div style={{ fontSize: 10.5, color: '#7d8399' }}>Low</div></div>
-            <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 8, padding: 10, textAlign: 'center' }}><div style={{ font: '700 18px Sora,sans-serif', color: 'oklch(0.8 0.15 95)' }}>184</div><div style={{ fontSize: 10.5, color: '#7d8399' }}>Moderate</div></div>
-            <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 8, padding: 10, textAlign: 'center' }}><div style={{ font: '700 18px Sora,sans-serif', color: 'oklch(0.7 0.17 55)' }}>96</div><div style={{ fontSize: 10.5, color: '#7d8399' }}>High</div></div>
-            <div style={{ background: 'rgba(255,255,255,.03)', borderRadius: 8, padding: 10, textAlign: 'center' }}><div style={{ font: '700 18px Sora,sans-serif', color: 'oklch(0.62 0.21 25)' }}>27</div><div style={{ fontSize: 10.5, color: '#7d8399' }}>Critical</div></div>
+          <div style={{ flex: 1, minHeight: 80, position: 'relative', borderRadius: 16, border: '1px solid rgba(255,255,255,.06)', background: 'radial-gradient(circle at 30% 20%,oklch(0.4 0.15 275 / 0.16),transparent 60%), rgba(255,255,255,.015)', padding: 20, display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+            <div className="tsa-card-hover" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 9, textAlign: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid oklch(0.6 0.15 235 / 0.22)', borderRadius: 12, padding: '14px 8px' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,oklch(0.58 0.19 275 / 0.3),oklch(0.6 0.15 235 / 0.3))', border: '1px solid oklch(0.6 0.15 235 / 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="oklch(0.72 0.14 235)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l8 4v6c0 5.5-3.5 8.5-8 10-4.5-1.5-8-4.5-8-10V6l8-4z" /><path d="M9 12l2 2 4-4" /></svg></div>
+              <div style={{ fontSize: 11.5, color: '#aab0c0', lineHeight: 1.3 }}>Protection-first design</div>
+            </div>
+            <div className="tsa-card-hover" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 9, textAlign: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid oklch(0.72 0.15 145 / 0.22)', borderRadius: 12, padding: '14px 8px' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,oklch(0.72 0.15 145 / 0.28),oklch(0.65 0.14 165 / 0.28))', border: '1px solid oklch(0.72 0.15 145 / 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="oklch(0.78 0.16 145)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg></div>
+              <div style={{ fontSize: 11.5, color: '#aab0c0', lineHeight: 1.3 }}>AES-256 encryption</div>
+            </div>
+            <div className="tsa-card-hover" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 9, textAlign: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid oklch(0.8 0.15 95 / 0.22)', borderRadius: 12, padding: '14px 8px' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,oklch(0.8 0.15 95 / 0.28),oklch(0.74 0.16 60 / 0.28))', border: '1px solid oklch(0.8 0.15 95 / 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="oklch(0.82 0.15 95)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8v4l3 2" /><circle cx="12" cy="12" r="9" /></svg></div>
+              <div style={{ fontSize: 11.5, color: '#aab0c0', lineHeight: 1.3 }}>24/7 crisis monitoring</div>
+            </div>
+            <div className="tsa-card-hover" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 9, textAlign: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid oklch(0.62 0.21 340 / 0.22)', borderRadius: 12, padding: '14px 8px' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,oklch(0.62 0.21 340 / 0.28),oklch(0.58 0.19 275 / 0.28))', border: '1px solid oklch(0.62 0.21 340 / 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="oklch(0.75 0.17 340)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 10-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z" /></svg></div>
+              <div style={{ fontSize: 11.5, color: '#aab0c0', lineHeight: 1.3 }}>Survivor-centered care</div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ROLE ENTRY */}
-      <div style={{ padding: '0 48px 90px', maxWidth: 1200, margin: '0 auto' }}>
+      <div className="tsa-landing-section" style={{ padding: '0 48px 90px', maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div style={{ font: "600 12.5px 'IBM Plex Mono',monospace", color: 'oklch(0.7 0.13 200)', letterSpacing: '1px', marginBottom: 10 }}>CHOOSE YOUR ENTRY POINT</div>
           <h2 style={{ font: '700 28px Sora,sans-serif', margin: 0 }}>Built for both sides of the case</h2>
@@ -146,7 +211,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* MISSION */}
-      <div id="mission" style={{ padding: '80px 48px', maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
+      <div id="mission" className="tsa-landing-section" style={{ padding: '80px 48px', maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
         <div style={{ font: "600 12.5px 'IBM Plex Mono',monospace", color: 'oklch(0.7 0.13 200)', letterSpacing: '1px', marginBottom: 14 }}>MISSION</div>
         <p style={{ font: '600 26px/1.5 Sora,sans-serif', color: '#eef0f6', maxWidth: 820, margin: '0 auto' }}>
           To protect Scheduled Caste and Scheduled Tribe victims of atrocities by detecting psychological distress early, routing every complaint through an evidence-based risk lens, and connecting victims to counselling, medical, legal and protective support before harm escalates.
@@ -154,12 +219,12 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* FEATURES */}
-      <div id="features" style={{ padding: '20px 48px 90px', maxWidth: 1360, margin: '0 auto' }}>
+      <div id="features" className="tsa-landing-section" style={{ padding: '20px 48px 90px', maxWidth: 1360, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{ font: "600 12.5px 'IBM Plex Mono',monospace", color: 'oklch(0.7 0.13 200)', letterSpacing: '1px', marginBottom: 10 }}>KEY FEATURES</div>
           <h2 style={{ font: '700 32px Sora,sans-serif', margin: 0 }}>Built for the full case lifecycle</h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
+        <div className="tsa-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
           {LANDING_FEATURES.map((f) => (
             <Hoverable
               key={f.title}
@@ -177,7 +242,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* WORKFLOW */}
-      <div id="workflow" style={{ padding: '80px 48px', background: 'rgba(255,255,255,.02)', borderTop: '1px solid rgba(255,255,255,.06)', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+      <div id="workflow" className="tsa-landing-section" style={{ padding: '80px 48px', background: 'rgba(255,255,255,.02)', borderTop: '1px solid rgba(255,255,255,.06)', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 44 }}>
             <div style={{ font: "600 12.5px 'IBM Plex Mono',monospace", color: 'oklch(0.7 0.13 200)', letterSpacing: '1px', marginBottom: 10 }}>AI WORKFLOW</div>
@@ -198,12 +263,12 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* STAKEHOLDERS */}
-      <div id="stakeholders" style={{ padding: '80px 48px', maxWidth: 1200, margin: '0 auto' }}>
+      <div id="stakeholders" className="tsa-landing-section" style={{ padding: '80px 48px', maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 44 }}>
           <div style={{ font: "600 12.5px 'IBM Plex Mono',monospace", color: 'oklch(0.7 0.13 200)', letterSpacing: '1px', marginBottom: 10 }}>STAKEHOLDERS</div>
           <h2 style={{ font: '700 32px Sora,sans-serif', margin: 0 }}>One platform, five coordinated roles</h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16 }}>
+        <div className="tsa-grid-5" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16 }}>
           {ROLES.map((r) => (
             <Hoverable
               key={r.name}
@@ -221,7 +286,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* BENEFITS + HELPLINE */}
-      <div style={{ padding: '20px 48px 80px', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+      <div className="tsa-grid-2 tsa-landing-section" style={{ padding: '20px 48px 80px', maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
         <div style={{ background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 16, padding: 32 }}>
           <div style={{ font: "600 12.5px 'IBM Plex Mono',monospace", color: 'oklch(0.72 0.15 145)', letterSpacing: '1px', marginBottom: 14 }}>BENEFITS</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -241,11 +306,11 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* TESTIMONIALS */}
-      <div style={{ padding: '20px 48px 90px', maxWidth: 1200, margin: '0 auto' }}>
+      <div className="tsa-landing-section" style={{ padding: '20px 48px 90px', maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 44 }}>
           <div style={{ font: "600 12.5px 'IBM Plex Mono',monospace", color: 'oklch(0.7 0.13 200)', letterSpacing: '1px', marginBottom: 10 }}>FROM THE FIELD</div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
+        <div className="tsa-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
           {TESTIMONIALS.map((t) => (
             <Hoverable
               key={t.name}
@@ -261,7 +326,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* GOV COLLAB */}
-      <div style={{ padding: '56px 48px', borderTop: '1px solid rgba(255,255,255,.06)', textAlign: 'center' }}>
+      <div className="tsa-landing-section" style={{ padding: '56px 48px', borderTop: '1px solid rgba(255,255,255,.06)', textAlign: 'center' }}>
         <div style={{ fontSize: 12, color: '#7d8399', letterSpacing: '1px', marginBottom: 18 }}>IN COLLABORATION WITH</div>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 40, flexWrap: 'wrap', color: '#8b91a3', font: '600 13.5px Sora,sans-serif' }}>
           <div>Department of Social Justice &amp; Empowerment</div>
@@ -272,7 +337,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* CTA */}
-      <div style={{ padding: '70px 48px', textAlign: 'center', background: 'linear-gradient(135deg,oklch(0.22 0.05 275),oklch(0.18 0.04 235))' }}>
+      <div className="tsa-landing-section" style={{ padding: '70px 48px', textAlign: 'center', background: 'linear-gradient(135deg,oklch(0.22 0.05 275),oklch(0.18 0.04 235))' }}>
         <h2 style={{ font: '700 30px Sora,sans-serif', margin: '0 0 16px' }}>Ready to bring early intervention to your jurisdiction?</h2>
         <p style={{ color: '#c4c8d4', margin: '0 0 28px' }}>Request onboarding for your district, department, or helpline desk.</p>
         <Hoverable
@@ -286,7 +351,7 @@ export default function Landing({ onEnterPlatform, onEnterVictimPortal }) {
       </div>
 
       {/* FOOTER */}
-      <div style={{ padding: '36px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: '#7d8399', flexWrap: 'wrap', gap: 12 }}>
+      <div className="tsa-landing-section" style={{ padding: '36px 48px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, color: '#7d8399', flexWrap: 'wrap', gap: 12 }}>
         <div>&copy; 2026 TraumaSense AI &middot; Ministry of Social Justice and Empowerment</div>
         <div style={{ display: 'flex', gap: 20 }}>
           <a href="#" style={{ color: '#7d8399' }}>Privacy</a>

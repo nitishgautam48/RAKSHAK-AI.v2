@@ -1,14 +1,22 @@
 import Hoverable from './Hoverable';
 import { LANGS } from '../data/constants';
 
-export default function Topbar({ title, role, userName, lang, onLangChange, onLogout }) {
+export default function Topbar({ title, role, userName, lang, onLangChange, onLogout, onOpenMobileSidebar }) {
   const roleLabel = (role || '').replace(/_/g, ' ').replace(/\w\S*/g, (w) => w.charAt(0) + w.slice(1).toLowerCase());
   const initialsSource = userName || roleLabel || 'U';
   const userInitials = initialsSource.split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
     <div style={{ height: 64, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 28px', borderBottom: '1px solid rgba(255,255,255,.06)', background: 'rgba(255,255,255,.015)' }}>
-      <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <button
+          className="tsa-hamburger"
+          onClick={onOpenMobileSidebar}
+          aria-label="Open menu"
+          style={{ display: 'none', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.04)', color: '#eef0f6', cursor: 'pointer', flex: 'none' }}
+        >
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+        </button>
         <div style={{ font: '700 17px Sora,sans-serif' }}>{title}</div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative' }}>

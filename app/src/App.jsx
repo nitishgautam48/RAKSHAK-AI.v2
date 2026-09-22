@@ -61,6 +61,7 @@ export default function App() {
   const [page, setPage] = useState('dashboard');
   const [lang, setLang] = useState('English');
   const [selectedVictimIdx, setSelectedVictimIdx] = useState(0);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Rehydrate straight into the right shell on a page refresh if a valid
   // session token is already stored (see AuthContext's GET /api/auth/me).
@@ -113,8 +114,18 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#0d0f16', color: '#eef0f6', fontFamily: "'IBM Plex Sans',sans-serif" }}>
-      <Sidebar page={page} onSelectPage={setPage} onExit={handleLogout} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div
+        className={`tsa-sidebar-backdrop${mobileSidebarOpen ? ' tsa-sidebar-open' : ''}`}
+        onClick={() => setMobileSidebarOpen(false)}
+      />
+      <Sidebar
+        page={page}
+        onSelectPage={setPage}
+        onExit={handleLogout}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
+      />
+      <div className="tsa-maincol" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <Topbar
           title={PAGE_TITLES[page]}
           role={user?.role}
@@ -122,6 +133,7 @@ export default function App() {
           lang={lang}
           onLangChange={(e) => setLang(e.target.value)}
           onLogout={handleLogout}
+          onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
         />
         <div className="tsa-scroll" style={{ flex: 1, overflowY: 'auto', padding: 28 }}>
           {PageComponent ? (

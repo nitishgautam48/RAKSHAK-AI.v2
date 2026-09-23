@@ -44,7 +44,20 @@ export default function VictimAssessment() {
             <div style={card}>
               <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 14 }}>Incident Details</div>
               <div style={{ fontSize: 12.5, color: '#8b91a3', marginBottom: 10 }}>Type: <span style={{ color: '#eef0f6' }}>{complaint.incidentType}</span> &middot; Filed {new Date(complaint.createdAt).toLocaleDateString()}</div>
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: '#c4c8d4' }}>{complaint.narrative}</div>
+              {/* complaint.narrative is fixed at submission time - for a
+                  voice-only complaint that's just the fixed placeholder (see
+                  FileComplaint.jsx's VOICE_ONLY_PLACEHOLDER), never updated
+                  even after Whisper successfully transcribes the audio. The
+                  real transcript lives on assessment.sourceText (see
+                  deriveAnalyzedText in assessment.service.ts) - shown here
+                  once an assessment exists, since that's what was actually
+                  analyzed and scored, not just what was originally attached. */}
+              <div style={{ fontSize: 13, lineHeight: 1.6, color: '#c4c8d4' }}>{assessment?.sourceText || complaint.narrative}</div>
+              {assessment?.sourceText && assessment.sourceText !== complaint.narrative && (
+                <div style={{ marginTop: 10, fontSize: 11, color: '#5c6178' }}>
+                  Real speech-to-text transcript (as analyzed) - see Voice Analysis for full audio details.
+                </div>
+              )}
             </div>
           </div>
           <div style={card}>

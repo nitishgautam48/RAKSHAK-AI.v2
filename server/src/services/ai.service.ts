@@ -46,8 +46,17 @@ export interface AssessResponse {
     victimTestimonyDetected: boolean;
     nativeReviewRecommended: boolean;
     nativeReviewMatchedTerms: string[];
+    negationScopingApplied: boolean;
+    negationDiscountedTerms: string[];
     llmUnderstanding: { model: string; rationale: string; scores: Record<string, number>; injectionSuspected: boolean } | null;
     semanticUnderstanding: {
+      model: string;
+      scores: Record<string, number>;
+      suicidalIdeationSimilarity: number;
+      topMatches: Record<string, { phrase: string; similarity: number }>;
+    } | null;
+    indicTranslation: { model: string; sourceLanguage: string; translatedText: string } | null;
+    indicBertSemantic: {
       model: string;
       scores: Record<string, number>;
       suicidalIdeationSimilarity: number;
@@ -57,6 +66,17 @@ export interface AssessResponse {
   emotion: {
     fear: number; anxiety: number; distress: number; sadness: number; anger: number; hope: number; neutral: number;
     dominant_emotion: string; severity_index: number;
+  };
+  crisisTriage: {
+    level: string;
+    score: number;
+    emotionalDistressScore: number;
+    suicidalIdeationFlag: boolean;
+    threatScore: number;
+    severeSignals: string[];
+    elevatedSignals: string[];
+    reasons: string[];
+    modelVersion: string;
   };
   svi: {
     value: number; band: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL'; confidence: number; modelVersion: string;

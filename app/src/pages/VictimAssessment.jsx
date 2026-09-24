@@ -1,6 +1,7 @@
 import { psychColor } from '../data/constants';
 import { useAssessmentSelector } from '../lib/useAssessmentSelector';
 import ComplaintSelector from '../components/ComplaintSelector';
+import CrisisTriagePanel from '../components/CrisisTriagePanel';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 
@@ -20,6 +21,16 @@ export default function VictimAssessment() {
     <div className="tsa-fade">
       <ComplaintSelector complaints={complaints} selectedId={selectedId} onChange={setSelectedId} />
       {loading && <div style={{ color: '#7d8399', fontSize: 13 }}>Loading…</div>}
+      {!loading && complaint && engineOutputs.nlp?.suicidalIdeationFlag && (
+        <div style={{ ...card, marginBottom: 16, border: '1px solid oklch(0.62 0.21 25 / 0.5)', background: 'oklch(0.62 0.21 25 / 0.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ font: '800 13px Sora,sans-serif', color: 'oklch(0.7 0.2 25)' }}>⚠ SUICIDAL IDEATION DETECTED</div>
+          <div style={{ fontSize: 12, color: '#eef0f6' }}>
+            This narrative contains language matching suicidal-ideation patterns, independent of the overall risk band - immediate human
+            follow-up is warranted regardless of the SVI score.
+          </div>
+        </div>
+      )}
+      {!loading && complaint && <CrisisTriagePanel triage={engineOutputs.crisisTriage} />}
       {!loading && complaint && (
         <div style={{ display: 'grid', gridTemplateColumns: '.9fr 1.1fr', gap: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

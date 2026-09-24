@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import TranscriptSourceBadge from '../components/TranscriptSourceBadge';
+import CrisisTriagePanel from '../components/CrisisTriagePanel';
 import { useLiveTranscription } from '../lib/useLiveTranscription';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 20 };
@@ -310,7 +311,7 @@ export default function RealTimeAssessment() {
                 </div>
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,.06)' }}>
-                <div style={{ color: '#8b91a3' }}>Confidence Level</div><div style={{ fontWeight: 600, color: 'oklch(0.68 0.14 200)' }}>{result.nlp.confidence}%</div>
+                <div style={{ color: '#8b91a3' }} title="Reflects how much text there was to analyze, not how certain the model is about the severity it computed">Narrative Length Confidence</div><div style={{ fontWeight: 600, color: 'oklch(0.68 0.14 200)' }}>{result.nlp.confidence}%</div>
               </div>
             </div>
           ) : (
@@ -335,6 +336,18 @@ export default function RealTimeAssessment() {
 
       {svi && (
         <>
+          {result.nlp.suicidalIdeationFlag && (
+            <div style={{ ...card, marginBottom: 16, border: '1px solid oklch(0.62 0.21 25 / 0.5)', background: 'oklch(0.62 0.21 25 / 0.12)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ font: '800 13px Sora,sans-serif', color: 'oklch(0.7 0.2 25)' }}>⚠ SUICIDAL IDEATION DETECTED</div>
+              <div style={{ fontSize: 12, color: '#eef0f6' }}>
+                This narrative contains language matching suicidal-ideation patterns, independent of the overall {svi.band} risk band - immediate
+                human follow-up is warranted regardless of the SVI score.
+              </div>
+            </div>
+          )}
+
+          <CrisisTriagePanel triage={result.crisisTriage} />
+
           {svi.requiresPriorityReview && (
             <div style={{ ...card, marginBottom: 16, border: '1px solid oklch(0.7 0.17 55 / 0.4)', background: 'oklch(0.7 0.17 55 / 0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ font: '700 13px Sora,sans-serif', color: 'oklch(0.78 0.15 55)' }}>🚩 PRIORITY REVIEW</div>
@@ -442,6 +455,22 @@ export default function RealTimeAssessment() {
                   <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.13 200)', fontWeight: 600, marginBottom: 4 }}>Semantic Match (free/local paraphrase detection)</div>
                   <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>
                     Closest reference match: "{Object.values(result.nlp.semanticUnderstanding.topMatches).sort((a, b) => b.similarity - a.similarity)[0]?.phrase}"
+                  </div>
+                </div>
+              )}
+              {result.nlp.indicTranslation && (
+                <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: 'oklch(0.65 0.14 200 / 0.08)', border: '1px solid oklch(0.65 0.14 200 / 0.25)' }}>
+                  <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.13 200)', fontWeight: 600, marginBottom: 4 }}>Indic Translation Bridge</div>
+                  <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>
+                    Detected source language: {result.nlp.indicTranslation.sourceLanguage} - translated to English and re-scanned.
+                  </div>
+                </div>
+              )}
+              {result.nlp.indicBertSemantic && (
+                <div style={{ marginTop: 12, padding: 10, borderRadius: 10, background: 'oklch(0.7 0.15 300 / 0.08)', border: '1px solid oklch(0.7 0.15 300 / 0.25)' }}>
+                  <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.15 300)', fontWeight: 600, marginBottom: 4 }}>Native-Language Semantic Match (IndicBERT, experimental)</div>
+                  <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>
+                    Closest reference match: "{Object.values(result.nlp.indicBertSemantic.topMatches).sort((a, b) => b.similarity - a.similarity)[0]?.phrase}"
                   </div>
                 </div>
               )}

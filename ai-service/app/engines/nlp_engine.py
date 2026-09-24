@@ -868,6 +868,16 @@ def analyze(text: str) -> NlpIndicators:
     # ("she told police 'I was scared'").
     victim_testimony_detected = has_category_evidence and first_person_count >= 2
 
+    # HONESTY NOTE: this is NOT a measure of how certain the model is about
+    # the severity it computed - it is a proxy for how much text there was
+    # to analyze (more words -> a higher number, capped at 95%). A one-line
+    # narrative and a ten-paragraph one describing the same severity would
+    # score this very differently even though the underlying category
+    # scores could be equally well-supported. Surfaced to the UI as
+    # "Confidence" with no qualifier before this comment existed - see the
+    # frontend's own label for how that reads to staff. Kept as-is (not
+    # renamed) to avoid a wider blast radius across every consumer of this
+    # field; the UI label is what actually needed fixing.
     confidence = float(min(95.0, 55 + min(30, word_count / 3)))
 
     return NlpIndicators(

@@ -109,6 +109,30 @@ export default function NlpAnalysis() {
               </div>
             )}
 
+            {nlp?.indicTranslation && (
+              <div style={{ background: 'oklch(0.65 0.14 200 / 0.08)', border: '1px solid oklch(0.65 0.14 200 / 0.25)', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.13 200)', fontWeight: 600, marginBottom: 6 }}>
+                  Indic Translation Bridge (source language outside the lexicon's 8-language coverage)
+                </div>
+                <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>
+                  Detected source language: <span style={{ color: '#eef0f6' }}>{nlp.indicTranslation.sourceLanguage}</span> - translated to English
+                  and re-scanned so a paraphrase match was still possible instead of the lexicon finding nothing.
+                </div>
+              </div>
+            )}
+
+            {nlp?.indicBertSemantic && (
+              <div style={{ background: 'oklch(0.7 0.15 300 / 0.08)', border: '1px solid oklch(0.7 0.15 300 / 0.25)', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 10.5, color: 'oklch(0.75 0.15 300)', fontWeight: 600, marginBottom: 6 }}>
+                  Native-Language Semantic Match (IndicBERT, experimental - not fine-tuned for sentence-similarity, see AI Model Monitoring)
+                </div>
+                <div style={{ fontSize: 11.5, color: '#c4c8d4', lineHeight: 1.5 }}>
+                  Closest reference match: <span style={{ color: '#eef0f6' }}>"{Object.values(nlp.indicBertSemantic.topMatches).sort((a, b) => b.similarity - a.similarity)[0]?.phrase}"</span>
+                  {' '}(similarity {Object.values(nlp.indicBertSemantic.topMatches).sort((a, b) => b.similarity - a.similarity)[0]?.similarity})
+                </div>
+              </div>
+            )}
+
             {nlp?.suicidalIdeationFlag && (
               <div style={{ background: 'oklch(0.62 0.21 25 / 0.12)', border: '1px solid oklch(0.62 0.21 25 / 0.35)', borderRadius: 14, padding: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(0.75 0.18 25)', marginBottom: 4 }}>Suicidal Ideation Language Flagged</div>
@@ -121,7 +145,7 @@ export default function NlpAnalysis() {
             {nlp ? (
               <div style={card}>
                 <div style={{ font: '600 14px Sora,sans-serif', marginBottom: 4 }}>NLP Category Scores</div>
-                <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>Confidence {nlp.confidence}%</div>
+                <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }} title="Reflects how much text there was to analyze, not how certain the model is about the severity it computed">Narrative Length Confidence {nlp.confidence}%</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {indicators.map(([label, value]) => {
                     const lvl = scoreLevel(value);

@@ -115,14 +115,31 @@ export async function persistAssessment(prisma: PrismaClient, input: PersistAsse
       },
     });
 
-    for (const engine of ['voice', 'nlp', 'emotion', 'svi'] as const) {
+    // crisisTriage was previously computed on every request and returned in
+    // the live API response, but never persisted here - so it could only
+    // ever be seen on the page that made the original POST call (Real-Time
+    // Assessment's own in-memory `result` state), never on a page that
+    // reloads an assessment afterward (Victim Assessment, NLP Analysis,
+    // etc., which all read engineOutputs from this exact table). versionKey
+    // differs from `engine` here because ai-service registers this engine
+    // as "crisis_triage" (snake_case, see main.py's registry.
+    // register_model_version calls) while the response DATA field is
+    // "crisisTriage" (camelCase, matching every other field's convention).
+    const enginesToPersist: { engine: 'voice' | 'nlp' | 'emotion' | 'svi' | 'crisisTriage'; versionKey: string }[] = [
+      { engine: 'voice', versionKey: 'voice' },
+      { engine: 'nlp', versionKey: 'nlp' },
+      { engine: 'emotion', versionKey: 'emotion' },
+      { engine: 'svi', versionKey: 'svi' },
+      { engine: 'crisisTriage', versionKey: 'crisis_triage' },
+    ];
+    for (const { engine, versionKey } of enginesToPersist) {
       const payload = ai[engine];
       if (!payload) continue;
       await tx.aIModelOutput.create({
         data: {
           assessmentId: created.id,
           engine,
-          modelVersion: ai.modelVersions[engine] ?? 'unknown',
+          modelVersion: ai.modelVersions[versionKey] ?? 'unknown',
           rawJson: JSON.stringify(payload),
           latencyMs: ai.latencyMs,
         },

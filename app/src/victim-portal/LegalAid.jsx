@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 import { LEGAL_RESOURCES, LEGAL_FAQ } from '../data/constants';
 
 const panel = { background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 14, padding: 16 };
@@ -10,8 +11,21 @@ export default function LegalAid() {
   const [loading, setLoading] = useState(true);
   const [openFaq, setOpenFaq] = useState(null);
 
+  const reload = () => api.get('/api/cases/mine').then(setKase).catch(() => {}).finally(() => setLoading(false));
+
+  useEffect(() => { reload(); }, []);
+
+  // A new court hearing, compensation update, or case-status change should
+  // reach this page live, same as CaseTimeline.jsx.
   useEffect(() => {
-    api.get('/api/cases/mine').then(setKase).catch(() => {}).finally(() => setLoading(false));
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('case:status_changed', reload);
+    socket.on('case:timeline_update', reload);
+    return () => {
+      socket.off('case:status_changed', reload);
+      socket.off('case:timeline_update', reload);
+    };
   }, []);
 
   const legal = kase?.legalAid?.[0];

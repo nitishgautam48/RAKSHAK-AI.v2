@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const STATUS_COLORS = { uploaded: 'oklch(0.8 0.15 95)', verified: 'oklch(0.72 0.15 145)', rejected: 'oklch(0.62 0.21 25)' };
 const STATUS_OPTIONS = ['All', 'uploaded', 'verified', 'rejected'];
@@ -11,8 +12,17 @@ export default function MyDocuments() {
   const [filterStatus, setFilterStatus] = useState('All');
   const [openingId, setOpeningId] = useState(null);
 
+  const reload = () => api.get('/api/documents').then(setDocuments).catch(() => setDocuments([])).finally(() => setLoading(false));
+
+  useEffect(() => { reload(); }, []);
+
+  // A document staff uploads to your case (e.g. an FIR copy) should show
+  // up here without you having to reload the page.
   useEffect(() => {
-    api.get('/api/documents').then(setDocuments).catch(() => setDocuments([])).finally(() => setLoading(false));
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('document:new', reload);
+    return () => socket.off('document:new', reload);
   }, []);
 
   const filtered = useMemo(

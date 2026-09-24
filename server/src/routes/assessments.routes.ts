@@ -92,6 +92,32 @@ assessmentsRouter.post('/', asyncHandler(async (req, res) => {
     }
   }
 
+  // Phase 3: a CRITICAL score must surface as an immediately-visible alert
+  // to whoever is on shift, not just to a pre-assigned officer - a fresh
+  // complaint's case has no assignment yet (the common case for a brand
+  // new submission), so the HIGH/CRITICAL notify() loop above sends to
+  // nobody until someone is assigned. Broadcast to the whole 'government'
+  // room (every connected staff socket joins it on connect - see
+  // socket.service.ts) so a dedicated alert banner can render regardless
+  // of which page a staff member currently has open, same as a real
+  // dispatch board where anyone on shift sees a new critical incident.
+  if (ai.svi.band === 'CRITICAL') {
+    let complaintCode: string | null = null;
+    if (body.complaintId) {
+      const complaint = await prisma.complaint.findUnique({ where: { id: body.complaintId }, select: { code: true } });
+      complaintCode = complaint?.code ?? null;
+    }
+    broadcastCaseEvent(body.caseId ?? null, 'alert:critical', {
+      assessmentId: assessment.id,
+      caseId: body.caseId ?? null,
+      complaintId: body.complaintId ?? null,
+      complaintCode,
+      victimCode: victim.displayCode,
+      sviValue: ai.svi.value,
+      createdAt: assessment.createdAt,
+    });
+  }
+
   res.status(201).json({ assessmentId: assessment.id, ai });
 }));
 

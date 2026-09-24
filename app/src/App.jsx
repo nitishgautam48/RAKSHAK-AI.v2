@@ -5,6 +5,7 @@ import VictimLoginGateway from './components/VictimLoginGateway';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import Placeholder from './components/Placeholder';
+import CriticalAlertBanner from './components/CriticalAlertBanner';
 import DashboardOverview from './pages/DashboardOverview';
 import Complaints from './pages/Complaints';
 import VictimAssessment from './pages/VictimAssessment';
@@ -114,6 +115,7 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#0d0f16', color: '#eef0f6', fontFamily: "'IBM Plex Sans',sans-serif" }}>
+      <CriticalAlertBanner onViewCase={() => setPage('command')} />
       <div
         className={`tsa-sidebar-backdrop${mobileSidebarOpen ? ' tsa-sidebar-open' : ''}`}
         onClick={() => setMobileSidebarOpen(false)}

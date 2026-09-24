@@ -339,7 +339,9 @@ export default function RealTimeAssessment() {
             <div style={{ ...card, marginBottom: 16, border: '1px solid oklch(0.7 0.17 55 / 0.4)', background: 'oklch(0.7 0.17 55 / 0.1)', display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ font: '700 13px Sora,sans-serif', color: 'oklch(0.78 0.15 55)' }}>🚩 PRIORITY REVIEW</div>
               <div style={{ fontSize: 12, color: '#c4c8d4' }}>
-                Firsthand account (first-person language detected) of a {svi.band} severity case - a triage signal for fast human review, not a change to the score itself.
+                {result.nlp.negationScopingApplied
+                  ? `Negation scoping discounted ${result.nlp.negationDiscountedTerms.join(', ')} in this narrative - a heuristic, not certainty, so this read needs a second human look in case it discounted something it shouldn't have.`
+                  : `Firsthand account (first-person language detected) of a ${svi.band} severity case - a triage signal for fast human review, not a change to the score itself.`}
               </div>
             </div>
           )}

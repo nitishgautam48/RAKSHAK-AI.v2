@@ -54,18 +54,22 @@ export default function NlpAnalysis() {
                 <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>English + 7 Indian languages lexicon scorer &middot; {nlp.wordCount} words analyzed</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 10px' }}>
                   {nlp.matchedKeywords.length === 0 && <div style={{ color: '#5c6178', fontSize: 12.5 }}>No indicator keywords matched in this narrative.</div>}
-                  {nlp.matchedKeywords.map((kw) => (
-                    <div
-                      key={kw}
-                      style={{
-                        padding: '4px 12px', borderRadius: 20, fontSize: 12.5,
-                        background: nlp.nativeReviewMatchedTerms?.includes(kw) ? 'oklch(0.75 0.15 55 / 0.15)' : 'rgba(255,255,255,.06)',
-                        color: nlp.nativeReviewMatchedTerms?.includes(kw) ? 'oklch(0.78 0.15 55)' : '#eef0f6',
-                      }}
-                    >
-                      {kw}
-                    </div>
-                  ))}
+                  {nlp.matchedKeywords.map((kw) => {
+                    const isNegated = kw.startsWith('(negated)');
+                    return (
+                      <div
+                        key={kw}
+                        style={{
+                          padding: '4px 12px', borderRadius: 20, fontSize: 12.5,
+                          background: isNegated ? 'rgba(255,255,255,.04)' : nlp.nativeReviewMatchedTerms?.includes(kw) ? 'oklch(0.75 0.15 55 / 0.15)' : 'rgba(255,255,255,.06)',
+                          color: isNegated ? '#5c6178' : nlp.nativeReviewMatchedTerms?.includes(kw) ? 'oklch(0.78 0.15 55)' : '#eef0f6',
+                          textDecoration: isNegated ? 'line-through' : 'none',
+                        }}
+                      >
+                        {kw}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -77,6 +81,18 @@ export default function NlpAnalysis() {
                   This score depended on lexicon terms ({nlp.nativeReviewMatchedTerms.join(', ')}) from a language that hasn't been
                   reviewed by a native or fluent speaker yet. Treat this read with extra scrutiny pending that review - it isn't
                   suppressed or discounted, just flagged.
+                </div>
+              </div>
+            )}
+
+            {nlp?.negationScopingApplied && (
+              <div style={{ background: 'oklch(0.7 0.17 55 / 0.1)', border: '1px solid oklch(0.7 0.17 55 / 0.35)', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'oklch(0.78 0.15 55)', marginBottom: 4 }}>🚩 Negation Scoping Applied</div>
+                <div style={{ fontSize: 12.5, color: '#eef0f6' }}>
+                  {nlp.negationDiscountedTerms.join(', ')} matched but appeared inside a detected negation's scope (e.g. "did not threaten"), so
+                  {' '}{nlp.negationDiscountedTerms.length === 1 ? 'it was' : 'they were'} heavily discounted rather than counted at full weight -
+                  shown struck through above. Negation scoping is a heuristic, not certainty, so this case has been flagged for priority human
+                  review in case it discounted something it shouldn't have.
                 </div>
               </div>
             )}

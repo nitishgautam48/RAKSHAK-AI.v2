@@ -484,6 +484,15 @@ class NlpIndicators:
     # extra scrutiny before being relied on.
     native_review_recommended: bool = False
     native_review_matched_terms: list[str] = field(default_factory=list)
+    # True when at least one keyword match was discounted because it fell
+    # inside a detected negation's scope (see negation_engine.py) - a
+    # transparency flag, same "flag, don't silently trust" philosophy as
+    # native_review_recommended above. Negation scoping is a heuristic, not
+    # certainty, so any case where it actually changed something gets
+    # flagged for human review rather than trusted outright - see main.py's
+    # requires_priority_review.
+    negation_scoping_applied: bool = False
+    negation_discounted_terms: list[str] = field(default_factory=list)
 
 
 SUICIDAL_PATTERNS = [
@@ -655,20 +664,54 @@ def _pronoun_pattern(term_l: str) -> re.Pattern[str]:
     return re.compile(re.escape(term_l))
 
 
-def _category_score(text_lower: str, terms: list[str]) -> CategoryHit:
-    matched: list[str] = []
-    count = 0
+# A discounted (negated) occurrence still counts for something - negation
+# scoping is a heuristic, not certainty (see negation_engine.py's module
+# docstring on scope-termination being imperfect), so a wrongly-negated real
+# threat isn't fully erased, only heavily discounted. Same "discount, never
+# zero out" philosophy as every other soft signal in this pipeline.
+_NEGATED_OCCURRENCE_WEIGHT = 0.15
+
+
+def _find_occurrences(text_lower: str, terms: list[str]) -> list[tuple[str, int, int]]:
+    """Every (term, start, end) character-span match for `terms` in
+    `text_lower` - the position data _category_score used to discard by
+    only keeping a count. Needed so negation scoping (which operates on
+    exact spans, not term identity) can be checked per-occurrence."""
+    occurrences: list[tuple[str, int, int]] = []
     for term in terms:
         term_l = term.lower()
-        occurrences = len(_term_pattern(term_l).findall(text_lower))
-        if occurrences:
-            matched.append(term)
-            count += occurrences
-    # Diminishing returns: first hit counts fully, later ones less, so one
-    # very repetitive keyword can't single-handedly saturate the score.
-    raw = sum(1 / (i + 1) for i in range(count)) if count else 0.0
+        for m in _term_pattern(term_l).finditer(text_lower):
+            occurrences.append((term, m.start(), m.end()))
+    return occurrences
+
+
+def _category_score(
+    occurrences: list[tuple[str, int, int]],
+    negated_spans: frozenset[tuple[int, int]] = frozenset(),
+) -> tuple[CategoryHit, list[str]]:
+    """Builds a CategoryHit from pre-found occurrences (see
+    _find_occurrences), discounting any occurrence whose exact span is in
+    `negated_spans` (see negation_engine.find_negated_spans) instead of the
+    old whole-text negation penalty. Returns (hit, discounted_term_names)
+    so the caller can report which terms were affected, for transparency.
+
+    Diminishing returns are preserved within each group (active vs.
+    negated) separately - first hit in a group counts fully, later ones
+    less - then the negated group's contribution is scaled down by
+    _NEGATED_OCCURRENCE_WEIGHT before combining, rather than treating every
+    occurrence as equally "the i-th hit overall" regardless of whether it
+    was negated.
+    """
+    active = [o for o in occurrences if (o[1], o[2]) not in negated_spans]
+    negated = [o for o in occurrences if (o[1], o[2]) in negated_spans]
+
+    raw = sum(1 / (i + 1) for i in range(len(active)))
+    raw += _NEGATED_OCCURRENCE_WEIGHT * sum(1 / (i + 1) for i in range(len(negated)))
     score = float(min(100.0, raw * 45))
-    return CategoryHit(category="", matched_terms=matched, raw_count=count, score=score)
+
+    matched = sorted({o[0] for o in occurrences})
+    discounted_terms = sorted({o[0] for o in negated})
+    return CategoryHit(category="", matched_terms=matched, raw_count=len(occurrences), score=score), discounted_terms
 
 
 def _apply_structural_pattern(hit: CategoryHit, pattern: re.Pattern[str], text_lower: str, label: str) -> None:
@@ -687,10 +730,36 @@ def analyze(text: str) -> NlpIndicators:
     words = WORD_RE.findall(text)
     word_count = len(words)
 
+    occurrences_by_cat: dict[str, list[tuple[str, int, int]]] = {
+        category: _find_occurrences(text_lower, terms) for category, terms in LEXICON.items()
+    }
+
+    # Scoped negation (see negation_engine.py) replaces the old whole-text
+    # penalty when the optional dependency is available - one spaCy pass
+    # over the whole narrative, checking every category's occurrences at
+    # once, rather than per-category. Falls back to "nothing negated here"
+    # (empty set) on any failure - the legacy whole-text penalty further
+    # below is the safety net for exactly that case.
+    negation_available = False
+    negated_spans: frozenset[tuple[int, int]] = frozenset()
+    from app.config import get_settings
+
+    if not get_settings().disable_negation_scoping:
+        from app.engines import negation_engine
+
+        all_spans = [(start, end) for occs in occurrences_by_cat.values() for (_, start, end) in occs]
+        negation_result = negation_engine.find_negated_spans(text_lower, all_spans)
+        negation_available = negation_result.available
+        negated_spans = frozenset(negation_result.negated_spans)
+
     hits: list[CategoryHit] = []
-    for category, terms in LEXICON.items():
-        hit = _category_score(text_lower, terms)
+    negation_discounted_terms: set[str] = set()
+    for category, occurrences in occurrences_by_cat.items():
+        hit, discounted = _category_score(occurrences, negated_spans)
         hit.category = category
+        if discounted:
+            hit.matched_terms.extend(f"(negated) {t}" for t in discounted)
+            negation_discounted_terms.update(discounted)
         hits.append(hit)
 
     by_cat = {h.category: h for h in hits}
@@ -708,16 +777,27 @@ def analyze(text: str) -> NlpIndicators:
     _apply_structural_pattern(by_cat["public_humiliation"], _PUBLIC_HUMILIATION_FOOTWEAR_RE, text_lower, "forced/made ... to remove/take off ... footwear")
     _apply_structural_pattern(by_cat["public_access_denial"], _PUBLIC_ACCESS_DENIAL_RE, text_lower, "not allowed/refused ... water/well/temple/pond")
     intensifier_boost = 1.0 + 0.1 * sum(1 for i in INTENSIFIERS if i in text_lower)
-    # Negation is scanned on the text with matched multi-word lexicon phrases
-    # blanked out first - otherwise a phrase that itself contains a negation
-    # word (e.g. "do not belong", the caste-targeting trigger phrase) gets
-    # wrongly discounted as if something else nearby had been negated,
-    # instead of being recognized as the very signal it's supposed to be.
-    matched_phrases = sorted({t for h in hits for t in h.matched_terms if " " in t}, key=len, reverse=True)
-    text_for_negation_scan = text_lower
-    for phrase in matched_phrases:
-        text_for_negation_scan = text_for_negation_scan.replace(phrase.lower(), " ")
-    negation_penalty = 1.0 - 0.15 * sum(1 for n in NEGATIONS if f" {n} " in f" {text_for_negation_scan} ")
+    if negation_available:
+        # Scoped, per-occurrence negation already applied inside
+        # _category_score above (see occurrences_by_cat/negated_spans) -
+        # the old whole-text penalty below would double-penalize the exact
+        # same negation words a second time, so it's skipped entirely here.
+        negation_penalty = 1.0
+    else:
+        # Fallback for when negation_engine's optional dependency isn't
+        # installed (or failed to build) - the original whole-text penalty,
+        # unchanged, so nothing regresses for a deployment that hasn't
+        # opted in. Negation is scanned on the text with matched multi-word
+        # lexicon phrases blanked out first - otherwise a phrase that
+        # itself contains a negation word (e.g. "do not belong", the
+        # caste-targeting trigger phrase) gets wrongly discounted as if
+        # something else nearby had been negated, instead of being
+        # recognized as the very signal it's supposed to be.
+        matched_phrases = sorted({t for h in hits for t in h.matched_terms if " " in t}, key=len, reverse=True)
+        text_for_negation_scan = text_lower
+        for phrase in matched_phrases:
+            text_for_negation_scan = text_for_negation_scan.replace(phrase.lower(), " ")
+        negation_penalty = 1.0 - 0.15 * sum(1 for n in NEGATIONS if f" {n} " in f" {text_for_negation_scan} ")
     modifier = max(0.5, min(1.5, intensifier_boost * negation_penalty))
 
     def scaled(cat: str) -> float:
@@ -816,4 +896,6 @@ def analyze(text: str) -> NlpIndicators:
         victim_testimony_detected=victim_testimony_detected,
         native_review_recommended=native_review_recommended,
         native_review_matched_terms=native_review_matched_terms,
+        negation_scoping_applied=bool(negation_discounted_terms),
+        negation_discounted_terms=sorted(negation_discounted_terms),
     )

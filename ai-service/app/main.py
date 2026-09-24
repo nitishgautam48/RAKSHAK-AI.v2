@@ -14,6 +14,7 @@ from app.engines import (
     emotion_engine,
     indic_semantic_engine,
     llm_engine,
+    negation_engine,
     nlp_engine,
     recommendation_engine,
     semantic_engine,
@@ -75,6 +76,23 @@ def register_model_versions() -> None:
             "enabled": settings.enable_indic_bert_semantic,
             "eligible_languages": sorted(indic_semantic_engine.ELIGIBLE_LANGUAGES),
             "caveat": "not fine-tuned for sentence-similarity - unvalidated signal, see module docstring",
+        },
+    )
+    # Always "enabled" unless explicitly opted out (disable_negation_
+    # scoping) - like semantic_understanding above, no cost/key gate, and
+    # it degrades to "nothing scoped" per-request (falling back to
+    # nlp_engine's legacy whole-text penalty) rather than failing the
+    # assessment if spacy/negspacy aren't installed. See
+    # negation_engine.py's module docstring for why language coverage is
+    # split into a 'tuned' (English) and 'minimal' (everything else) tier.
+    registry.register_model_version(
+        "negation_scoping",
+        "negspacy (NegEx)" if not settings.disable_negation_scoping else "disabled",
+        {
+            "origin": "rule_based_negex",
+            "enabled": not settings.disable_negation_scoping,
+            "tuned_languages": sorted(negation_engine.TUNED_LANGUAGES),
+            "caveat": "only English has a reviewed negation-trigger/termination-phrase list - see module docstring",
         },
     )
     registry.register_model_version(
@@ -308,7 +326,18 @@ def assess(body: AssessRequest) -> dict:
     # victim_testimony_detected) of a case that already scored HIGH/CRITICAL
     # should surface for fast human review. This never feeds back into the
     # score itself - see nlp_engine's FIRST_PERSON_MARKERS note.
-    requires_priority_review = nlp_result.victim_testimony_detected and svi_result.band in ("HIGH", "CRITICAL")
+    #
+    # Also triggers whenever negation scoping actually discounted a match
+    # (nlp_result.negation_scoping_applied), regardless of the final band -
+    # deliberately NOT gated on HIGH/CRITICAL like the testimony check
+    # above, because the exact failure mode being guarded against is
+    # negation scoping wrongly dragging a real CRITICAL case DOWN into a
+    # lower band, which would make a band-gated check blind to the one case
+    # it most needs to catch. Negation scoping is a heuristic (see
+    # negation_engine.py's module docstring on imperfect scope-termination
+    # detection), not certainty - any case where it fired gets a second,
+    # human look rather than being trusted outright.
+    requires_priority_review = (nlp_result.victim_testimony_detected and svi_result.band in ("HIGH", "CRITICAL")) or nlp_result.negation_scoping_applied
 
     recommendations = recommendation_engine.build(svi_result, nlp_result)
     explanation = build_explanation(svi_result, nlp_result)
@@ -368,6 +397,8 @@ def assess(body: AssessRequest) -> dict:
             "victimTestimonyDetected": nlp_result.victim_testimony_detected,
             "nativeReviewRecommended": nlp_result.native_review_recommended,
             "nativeReviewMatchedTerms": nlp_result.native_review_matched_terms,
+            "negationScopingApplied": nlp_result.negation_scoping_applied,
+            "negationDiscountedTerms": nlp_result.negation_discounted_terms,
             "llmUnderstanding": (
                 {
                     "model": llm_result.model,

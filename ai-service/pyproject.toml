@@ -42,6 +42,17 @@ indic-asr = [
     "nemo_toolkit[asr]>=2.0.0",
 ]
 
+# For scoped negation detection (see app/engines/negation_engine.py) -
+# unlike every other optional engine above, neither package needs any
+# downloaded model weights (negspacy is a rule-based NegEx implementation
+# over a blank spaCy tokenizer), so this works in network-restricted
+# environments that block HuggingFace/model-weight hosts, including this
+# sandbox. Install with `uv sync --extra negation`.
+negation = [
+    "spacy>=3.8.0",
+    "negspacy>=1.1.0",
+]
+
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",

@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     # restricted network access.
     disable_semantic_analysis: bool = False
 
+    # Opt-out (on by default whenever the optional dependency is present -
+    # see engines/negation_engine.py and pyproject.toml's `negation` extra)
+    # scoped negation detection for nlp_engine.py. Unlike disable_semantic_
+    # analysis above, this needs no downloaded model weights - only the
+    # spacy/negspacy packages - so there's no real cost/network reason to
+    # default it off; this flag exists for ops to turn it off without
+    # uninstalling packages, same purpose as the flag above.
+    disable_negation_scoping: bool = False
+
     # Opt-in Indic-to-English translation (see engines/translation_engine.py)
     # for narratives in languages OUTSIDE the NLP lexicon's 8-language
     # coverage - needs transformers+torch, a real new dependency not used

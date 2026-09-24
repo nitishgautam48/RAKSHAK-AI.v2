@@ -621,3 +621,44 @@ def test_recommendations_are_priority_ordered_by_confidence():
     recs = recommendation_engine.build(svi, nlp)
     confidences = [r.confidence for r in recs]
     assert confidences == sorted(confidences, reverse=True)
+
+
+def test_negation_scoping_suppresses_a_clearly_negated_threat():
+    # Regression test for the exact narrative that exposed the old whole-
+    # text negation penalty's weakness (see nlp_engine's KNOWN_LIMITATIONS
+    # limit-1 in mlops/evaluation.py): a fully negated/resolved account
+    # should read as LOW, not still HIGH from a flat -15%-per-negation-word
+    # penalty applied to the whole narrative regardless of position.
+    result = nlp_engine.analyze(
+        "I want to be clear that they did not threaten us and nobody has been hurt - everything is actually fine now."
+    )
+    assert result.threat_score < 30
+    assert result.negation_scoping_applied is True
+    assert "threaten" in result.negation_discounted_terms
+
+
+def test_negation_scoping_does_not_suppress_a_real_unrelated_threat():
+    # The other half of the same fix: a genuine threat mentioned elsewhere
+    # in a narrative that also happens to contain a negation word must stay
+    # at full weight, not get caught by the old whole-text penalty's blast
+    # radius.
+    result = nlp_engine.analyze(
+        "They threatened to kill me tonight because of my caste. I did not expect this to happen."
+    )
+    assert result.threat_score > 50
+    assert "threaten" not in result.negation_discounted_terms
+
+
+def test_negation_scoping_gracefully_degrades_when_dependency_missing(monkeypatch):
+    # negation_engine.find_negated_spans degrading to available=False must
+    # fall back to the legacy whole-text penalty, not crash or silently
+    # under/over-score.
+    from app.engines import negation_engine
+
+    def _unavailable(text, spans):
+        return negation_engine.NegationResult(available=False, error="simulated unavailable")
+
+    monkeypatch.setattr(negation_engine, "find_negated_spans", _unavailable)
+    result = nlp_engine.analyze("They threatened to kill us and burn our house tonight.")
+    assert result.threat_score > 0
+    assert result.negation_scoping_applied is False

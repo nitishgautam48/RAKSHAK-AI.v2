@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 import { WELLNESS_RESOURCES } from '../data/constants';
 
 const STATUS_META = {
@@ -15,6 +16,14 @@ export default function CounsellingCenter() {
 
   useEffect(() => {
     api.get('/api/counselling/sessions').then(setSessions).catch(() => setSessions([])).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const refresh = () => api.get('/api/counselling/sessions').then(setSessions).catch(() => {});
+    socket.on('counselling:update', refresh);
+    return () => socket.off('counselling:update', refresh);
   }, []);
 
   const upcoming = sessions

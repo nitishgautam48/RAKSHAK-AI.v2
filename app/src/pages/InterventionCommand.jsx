@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { COMMAND_STEPS } from '../data/constants';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const STATUS_COLOR = { pending: 'oklch(0.8 0.15 95)', active: 'oklch(0.62 0.21 25)', completed: 'oklch(0.72 0.15 145)', declined: '#5c6178' };
@@ -24,13 +25,35 @@ export default function InterventionCommand() {
   const [assignBusy, setAssignBusy] = useState(false);
 
   const reloadQueue = () => api.get('/api/cases/priority-queue?limit=15').then(setQueue).catch(() => {});
+  const reloadInterventions = () => Promise.all([api.get('/api/interventions'), api.get('/api/sos')])
+    .then(([iv, sos]) => { setInterventions(iv); setSosOpen(sos.filter((s) => s.status !== 'RESOLVED').length); })
+    .catch(() => {});
 
   useEffect(() => {
-    Promise.all([api.get('/api/interventions'), api.get('/api/sos')])
-      .then(([iv, sos]) => { setInterventions(iv); setSosOpen(sos.filter((s) => s.status !== 'RESOLVED').length); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    reloadInterventions().finally(() => setLoading(false));
     reloadQueue().finally(() => setQueueLoading(false));
+  }, []);
+
+  // The priority queue is computed fresh on every request server-side, but
+  // this page only ever asked for it once on mount - a new complaint, a
+  // fresh assessment, or a case status change elsewhere left it stale until
+  // a manual reload. Same story for the intervention/SOS counts.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('complaint:new', reloadQueue);
+    socket.on('assessment:new', reloadQueue);
+    socket.on('case:status_changed', reloadQueue);
+    socket.on('sos:new', reloadInterventions);
+    socket.on('sos:update', reloadInterventions);
+    return () => {
+      socket.off('complaint:new', reloadQueue);
+      socket.off('assessment:new', reloadQueue);
+      socket.off('case:status_changed', reloadQueue);
+      socket.off('sos:new', reloadInterventions);
+      socket.off('sos:update', reloadInterventions);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openAssignPicker = (caseId) => {

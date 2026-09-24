@@ -45,6 +45,13 @@ counsellingRouter.post(
       broadcastToVictim(victimProfile.userId, 'counselling:update', session);
     }
     await notify({ userId: body.counsellorId, eventType: 'counselling_session', title: 'New session on your calendar', body: 'A new counselling session has been scheduled.' });
+    // Counsellor Workspace (gov side) only ever fetched once on load, with
+    // no way to know a new session landed on its own calendar - the victim
+    // got a live push via broadcastToVictim above, but the counsellor never
+    // did. Every socket already joins `user:${user.sub}` on connect (see
+    // socket.service.ts), so this reuses that same room rather than adding
+    // new plumbing.
+    getIO()?.to(`user:${body.counsellorId}`).emit('counselling:update', session);
 
     await recordAudit({ req, action: 'CREATE', entityType: 'CounsellingSession', entityId: session.id });
     res.status(201).json(session);
@@ -68,6 +75,7 @@ counsellingRouter.patch(
 
     const victimProfile = await prisma.victimProfile.findUnique({ where: { victimId: session.victimId } });
     if (victimProfile) broadcastToVictim(victimProfile.userId, 'counselling:update', session);
+    getIO()?.to(`user:${session.counsellorId}`).emit('counselling:update', session);
 
     await recordAudit({ req, action: 'UPDATE', entityType: 'CounsellingSession', entityId: session.id });
     res.json(session);

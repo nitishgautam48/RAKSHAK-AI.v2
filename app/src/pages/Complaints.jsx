@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Hoverable from '../components/Hoverable';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const selectStyle = { background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: '#eef0f6', fontSize: 12.5, padding: '8px 12px', borderRadius: 7 };
 // Keyed to the backend's RiskLevel enum (LOW/MODERATE/HIGH/CRITICAL), not
@@ -49,6 +50,26 @@ export default function Complaints() {
   }, [filterRisk, filterStatus, filterSearch, filterState, filterDistrict]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Previously fetched once on mount and never again - a complaint filed
+  // (or re-scored) by anyone else while this page was open simply never
+  // appeared until a manual reload. Reuses the same `load` this page
+  // already calls on filter changes, so a live event applies the current
+  // filters too rather than bypassing them.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('complaint:new', load);
+    socket.on('complaint:linked', load);
+    socket.on('assessment:new', load);
+    socket.on('case:status_changed', load);
+    return () => {
+      socket.off('complaint:new', load);
+      socket.off('complaint:linked', load);
+      socket.off('assessment:new', load);
+      socket.off('case:status_changed', load);
+    };
+  }, [load]);
 
   const activeFilterChips = [
     filterRisk !== 'All Risk Levels' && { key: 'filterRisk', label: 'Risk: ' + filterRisk },

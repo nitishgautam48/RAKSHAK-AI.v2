@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const STATUS_META = {
@@ -44,6 +45,19 @@ export default function CounsellorWorkspace() {
       .then(setSessions)
       .catch(() => setSessions([]))
       .finally(() => setLoading(false));
+  }, [selectedId]);
+
+  // 'counselling:update' now reaches the counsellor's own socket room too
+  // (see counselling.routes.ts), not just the victim's - previously a
+  // newly-scheduled or updated session on this counsellor's own calendar
+  // never appeared here until they switched away and back.
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const refresh = () => api.get(`/api/counselling/sessions?counsellorId=${selectedId}`).then(setSessions).catch(() => {});
+    socket.on('counselling:update', refresh);
+    return () => socket.off('counselling:update', refresh);
   }, [selectedId]);
 
   const scheduled = sessions.filter((s) => s.status === 'scheduled').length;

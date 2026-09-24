@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const EVENT_COLOR = {
   status_change: 'oklch(0.65 0.14 200)',
@@ -21,6 +22,20 @@ export default function CaseTimeline() {
       .then(setKase)
       .catch((e) => { if (e.status === 404) setNoCase(true); })
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const refresh = () => api.get('/api/cases/mine').then(setKase).catch(() => {});
+    socket.on('case:status_changed', refresh);
+    socket.on('case:timeline_update', refresh);
+    socket.on('assessment:new', refresh);
+    return () => {
+      socket.off('case:status_changed', refresh);
+      socket.off('case:timeline_update', refresh);
+      socket.off('assessment:new', refresh);
+    };
   }, []);
 
   return (

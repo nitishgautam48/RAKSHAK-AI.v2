@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 import ComplaintSelector from '../components/ComplaintSelector';
 
 const EVENT_COLOR = {
@@ -35,6 +36,28 @@ export default function VictimJourneyTimeline() {
       .then((c) => (c.case ? api.get(`/api/cases/${c.case.id}`).then(setKase) : setKase(null)))
       .catch(() => setKase(null))
       .finally(() => setLoading(false));
+  }, [selectedId]);
+
+  // Mirrors the survivor-facing Case Timeline's own live subscription -
+  // this is the staff-facing view of the exact same timeline, so it was an
+  // easy page to miss when only the survivor side was made live.
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const refresh = () => {
+      api.get(`/api/complaints/${selectedId}`)
+        .then((c) => (c.case ? api.get(`/api/cases/${c.case.id}`).then(setKase) : setKase(null)))
+        .catch(() => {});
+    };
+    socket.on('case:status_changed', refresh);
+    socket.on('case:timeline_update', refresh);
+    socket.on('assessment:new', refresh);
+    return () => {
+      socket.off('case:status_changed', refresh);
+      socket.off('case:timeline_update', refresh);
+      socket.off('assessment:new', refresh);
+    };
   }, [selectedId]);
 
   return (

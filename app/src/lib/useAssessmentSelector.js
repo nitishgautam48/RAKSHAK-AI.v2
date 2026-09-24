@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { getSocket } from './socket';
 
 // Shared by every "assessment detail" page (Victim Assessment, Voice
 // Analysis, NLP Analysis, Explainable AI): lets an officer pick a real
@@ -44,6 +45,27 @@ export function useAssessmentSelector() {
       .catch(() => { if (!cancelled) setError('Could not load assessment.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
+  }, [selectedId]);
+
+  // Victim Assessment, Voice Analysis, NLP Analysis, and Explainable AI all
+  // share this hook - previously all four only ever loaded the selected
+  // complaint's assessment once (on selection), so a new assessment landing
+  // for the complaint currently on screen never appeared until the officer
+  // re-selected it. assessment:new doesn't carry complaintId in its payload
+  // (only victimId/caseId - see assessments.routes.ts), so this refetches
+  // unconditionally rather than trying to filter client-side; the server
+  // already scopes the actual response to `selectedId` correctly either way.
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const refresh = () => {
+      api.get(`/api/assessments?complaintId=${selectedId}`)
+        .then((list) => (list.length ? api.get(`/api/assessments/${list[0].id}`).then(setAssessment) : null))
+        .catch(() => {});
+    };
+    socket.on('assessment:new', refresh);
+    return () => socket.off('assessment:new', refresh);
   }, [selectedId]);
 
   // Convenience: parsed raw per-engine payloads (voice/nlp/emotion/svi),

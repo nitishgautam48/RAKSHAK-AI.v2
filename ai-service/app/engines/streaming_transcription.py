@@ -100,7 +100,9 @@ def get_shared_model():
         _model_load_error = "faster-whisper not installed"
         raise TranscriberUnavailable(_model_load_error) from e
     try:
-        _model = WhisperModel(model_path, device="cpu", compute_type="int8")
+        from app.config import get_settings
+
+        _model = WhisperModel(model_path, device="cpu", compute_type="int8", num_workers=get_settings().whisper_num_workers)
         return _model
     except Exception as e:  # noqa: BLE001 - model load failure (bad path, no network to fetch a size name, etc.) must degrade, not crash the WebSocket handler
         _model_load_error = f"model load failed: {e}"

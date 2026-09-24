@@ -30,6 +30,21 @@ class Settings(BaseSettings):
     # is the default in every environment.
     stt_provider: str = "operator_transcript"
 
+    # faster-whisper's own concurrency knob (CTranslate2's num_workers) -
+    # the same shared model instance is used for every live-transcription
+    # connection and every batch /v1/assess call (see get_shared_model() in
+    # streaming_transcription.py and LocalWhisperProvider in
+    # speech_engine.py). Left at faster-whisper's own default of 1, two
+    # people speaking live at the same time would genuinely queue behind
+    # each other for transcription - not a crash or a data-corruption risk
+    # (CTranslate2 queues concurrent calls to one worker safely), just
+    # rising latency under concurrent load. Raising this trades memory for
+    # real parallelism (per faster-whisper's own docs: "concurrent calls to
+    # self.model.generate() will run in parallel") - 4 is a reasonable
+    # starting point for a handful of simultaneous live sessions on CPU;
+    # tune based on real deployment concurrency and available RAM.
+    whisper_num_workers: int = 4
+
     # Optional real-language-understanding signal (see engines/llm_engine.py)
     # to catch narratives that describe something serious without using any
     # lexicon term - a structural limitation the keyword engine cannot fix by

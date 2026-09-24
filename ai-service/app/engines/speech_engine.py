@@ -75,7 +75,9 @@ class LocalWhisperProvider(SpeechToTextProvider):
                 "(not installed - see ai-service/pyproject.toml) plus local "
                 "model weights at WHISPER_MODEL_PATH.",
             ) from e
-        self._model = WhisperModel(model_path, device="cpu", compute_type="int8")
+        from app.config import get_settings
+
+        self._model = WhisperModel(model_path, device="cpu", compute_type="int8", num_workers=get_settings().whisper_num_workers)
 
     def transcribe(self, audio_bytes: bytes | None, provided_transcript: str | None, language_hint: str | None) -> TranscriptionResult:
         if not audio_bytes:
@@ -171,7 +173,43 @@ class IndicConformerProvider(SpeechToTextProvider):
         )
 
 
+# Manual failure-memoization (not @lru_cache - a plain lru_cache does not
+# cache exceptions, so a failed load would otherwise retry the full,
+# expensive model construction on every single call - same pitfall already
+# documented in semantic_engine.py and streaming_transcription.py).
+#
+# Real bug this fixes: get_provider() used to build a brand new
+# LocalWhisperProvider/IndicConformerProvider - i.e. load the entire model
+# from disk into memory - on EVERY call, and main.py calls get_provider()
+# fresh for every /v1/assess request with audio attached. Every uploaded
+# voice complaint was paying the full model-load cost on top of actual
+# transcription time, and concurrent requests would each hold their own
+# redundant full copy of the model in memory at once. The live-streaming
+# path already avoided this (see get_shared_model() in
+# streaming_transcription.py) - this brings the batch path in line with it.
+_provider_cache: dict[str, SpeechToTextProvider] = {}
+_provider_cache_error: dict[str, str] = {}
+
+
 def get_provider(provider_name: str) -> SpeechToTextProvider:
+    if provider_name == "operator_transcript":
+        return OperatorTranscriptProvider()  # no model to load, cheap to construct fresh every time
+
+    if provider_name in _provider_cache:
+        return _provider_cache[provider_name]
+    if provider_name in _provider_cache_error:
+        raise RuntimeError(_provider_cache_error[provider_name])
+
+    try:
+        provider = _build_provider(provider_name)
+        _provider_cache[provider_name] = provider
+        return provider
+    except Exception as e:  # noqa: BLE001 - memoize any construction failure so it degrades once, not on every request
+        _provider_cache_error[provider_name] = str(e)
+        raise
+
+
+def _build_provider(provider_name: str) -> SpeechToTextProvider:
     if provider_name == "whisper_local":
         import os
 

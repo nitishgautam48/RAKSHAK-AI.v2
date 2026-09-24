@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Hoverable from '../components/Hoverable';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const BAND_META = {
@@ -16,18 +17,33 @@ export default function RiskIntelligence() {
   const [trend, setTrend] = useState([]);
   const [districts, setDistricts] = useState([]);
 
+  const reload = () => Promise.all([
+    api.get('/api/analytics/risk-distribution'),
+    api.get('/api/analytics/overview'),
+    api.get('/api/analytics/svi-trend'),
+    api.get('/api/analytics/district-risk'),
+  ]).then(([d, ov, t, dr]) => {
+    setDist(d);
+    setOverview(ov);
+    setTrend(t);
+    setDistricts(dr.slice(0, 8));
+  }).catch(() => {});
+
+  useEffect(() => { reload(); }, []);
+
+  // These are national/district aggregates - any new or re-scored
+  // assessment shifts them, so this was stale the moment anyone else's
+  // work changed the numbers, not just on this officer's own actions.
   useEffect(() => {
-    Promise.all([
-      api.get('/api/analytics/risk-distribution'),
-      api.get('/api/analytics/overview'),
-      api.get('/api/analytics/svi-trend'),
-      api.get('/api/analytics/district-risk'),
-    ]).then(([d, ov, t, dr]) => {
-      setDist(d);
-      setOverview(ov);
-      setTrend(t);
-      setDistricts(dr.slice(0, 8));
-    }).catch(() => {});
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('assessment:new', reload);
+    socket.on('complaint:new', reload);
+    return () => {
+      socket.off('assessment:new', reload);
+      socket.off('complaint:new', reload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // See DashboardOverview.jsx's note: a lone data point can't form a line,

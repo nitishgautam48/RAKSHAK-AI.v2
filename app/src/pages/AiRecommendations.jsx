@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Hoverable from '../components/Hoverable';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const TYPE_OPTIONS = ['All Types', 'COUNSELLING', 'MEDICAL_AID', 'POLICE_PROTECTION', 'WITNESS_PROTECTION', 'LEGAL_AID', 'COMPENSATION_SUPPORT', 'SHELTER_SUPPORT', 'REHABILITATION_SUPPORT'];
 const RISK_COLORS = { LOW: 'oklch(0.72 0.15 145)', MODERATE: 'oklch(0.8 0.15 95)', HIGH: 'oklch(0.7 0.17 55)', CRITICAL: 'oklch(0.62 0.21 25)' };
@@ -18,6 +19,20 @@ export default function AiRecommendations() {
       .then((r) => setItems(r.items))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
+  }, [type]);
+
+  // Recommendations are generated per assessment - a new one anywhere adds
+  // rows this list was previously blind to until the officer changed the
+  // type filter (which happened to re-trigger the effect above) or reloaded.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const refresh = () => {
+      const params = type !== 'All Types' ? `?type=${type}&pageSize=40` : '?pageSize=40';
+      api.get(`/api/recommendations${params}`).then((r) => setItems(r.items)).catch(() => {});
+    };
+    socket.on('assessment:new', refresh);
+    return () => socket.off('assessment:new', refresh);
   }, [type]);
 
   return (

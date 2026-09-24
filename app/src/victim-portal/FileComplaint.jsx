@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { blobToWavBase64 } from '../lib/audioToWav';
+import { useLiveTranscription } from '../lib/useLiveTranscription';
 
 const optionBtn = { display: 'flex', alignItems: 'center', gap: 12, padding: 16, borderRadius: 14, border: '1px solid rgba(255,255,255,.1)', background: 'rgba(255,255,255,.04)', color: '#eef0f6', font: "600 14px 'IBM Plex Sans',sans-serif", cursor: 'pointer', textAlign: 'left' };
 const INCIDENT_TYPES = [
@@ -9,10 +10,10 @@ const INCIDENT_TYPES = [
   'Sexual harassment or assault', 'Discrimination in public services', 'Other',
 ];
 
-function formatSeconds(s) {
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${m}:${sec.toString().padStart(2, '0')}`;
+function formatElapsed(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 export default function FileComplaint() {
@@ -20,57 +21,55 @@ export default function FileComplaint() {
   const [narrative, setNarrative] = useState('');
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
-  const [recording, setRecording] = useState(false);
-  const [recordSeconds, setRecordSeconds] = useState(0);
-  const [micError, setMicError] = useState('');
   const [docFile, setDocFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
-  const streamRef = useRef(null);
-  const timerRef = useRef(null);
+  // Live speech-to-text, same engine already proven on the gov-side
+  // Real-Time Assessment page - replaces the old record-a-blob-then-
+  // convert-to-WAV-on-submit flow. As the survivor speaks, Whisper
+  // transcribes it a few words at a time and the real words land directly
+  // in the narrative box, instead of a fixed placeholder being submitted
+  // and only transcribed (if at all) later, invisibly, after the fact.
+  const live = useLiveTranscription();
+  const appendedSegmentCount = useRef(0);
+
+  useEffect(() => {
+    if (live.segments.length <= appendedSegmentCount.current) return;
+    const newText = live.segments.slice(appendedSegmentCount.current).join(' ');
+    appendedSegmentCount.current = live.segments.length;
+    setNarrative((prev) => (prev.trim() ? `${prev.trim()} ${newText}` : newText));
+  }, [live.segments]);
+
+  useEffect(() => {
+    if (!live.isActive) {
+      setElapsedSeconds(0);
+      return undefined;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [live.isActive]);
+
+  const startSpeaking = () => {
+    appendedSegmentCount.current = 0;
+    live.start();
+  };
+
+  // Release the mic if the survivor navigates away mid-session, rather
+  // than leaving it open in the background - live.stop is a stable
+  // useCallback ref, so this is deliberately mount/unmount-only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => live.stop(), []);
 
   useEffect(() => () => {
-    // Cleanup on unmount: release the mic and the blob: URL, don't leave
-    // either hanging around if the survivor navigates away mid-recording.
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    if (timerRef.current) clearInterval(timerRef.current);
+    // Cleanup on unmount: don't leave an uploaded-file blob: URL hanging
+    // around if the survivor navigates away.
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const startRecording = async () => {
-    setMicError('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      chunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
-        setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach((t) => t.stop());
-      };
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setRecording(true);
-      setRecordSeconds(0);
-      timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
-    } catch {
-      setMicError('Could not access your microphone. Check your browser permissions, or upload an audio file instead below.');
-    }
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
-    if (timerRef.current) clearInterval(timerRef.current);
-  };
 
   const discardRecording = () => {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -85,14 +84,14 @@ export default function FileComplaint() {
     setAudioUrl(URL.createObjectURL(file));
   };
 
-  // A survivor who only records/uploads audio and never types anything must
-  // still be able to submit - the narrative field itself stays required
-  // server-side (schema.prisma; not changing that here), so a voice-only
-  // submission sends this fixed placeholder instead of forcing typing.
-  // Real content still reaches staff: the audio itself is preserved and
-  // voice-DSP-analyzed either way - this placeholder only stands in for the
-  // required text field, it is not a substitute for a real transcript (see
-  // speech_engine.py's honesty notes on why that's a separate, harder gap).
+  // Live speaking fills the narrative box with real transcribed words as
+  // the survivor talks (see the useLiveTranscription effect above), so this
+  // placeholder now only covers the narrower case of an uploaded audio file
+  // with no typed text and no live speech - the narrative field stays
+  // required server-side (schema.prisma; not changing that here). Real
+  // content still reaches staff either way: the audio itself is preserved
+  // and voice-DSP-analyzed - this placeholder only stands in for the
+  // required text field, it is not a substitute for a real transcript.
   const VOICE_ONLY_PLACEHOLDER = '[Voice message submitted - no typed narrative. See attached audio recording.]';
 
   const submit = async () => {
@@ -113,10 +112,12 @@ export default function FileComplaint() {
       // previously filed but never analyzed at all, silently leaving staff
       // with no risk signal on the majority of intakes. Best-effort: the
       // complaint is already filed either way, and staff can re-run this
-      // later from Real-Time Assessment if it fails. Whether the audio came
-      // from live recording or a file upload, it's normalized to WAV first
-      // (see audioToWav.js) - the backend's decoder doesn't support the
-      // webm/opus browsers record in, or phone voice-memo formats like m4a.
+      // later from Real-Time Assessment if it fails. audioBlob here only
+      // ever comes from an uploaded file now (live speech never produces
+      // one - its words already landed directly in narrativeToSend above),
+      // and still gets normalized to WAV first (see audioToWav.js) - the
+      // backend's decoder doesn't support the webm/opus browsers record in,
+      // or phone voice-memo formats like m4a.
       //
       // Both failure points below used to fail completely silently (bare
       // .catch(() => {})) - a real bug: a consent gate (428), a WAV
@@ -157,6 +158,7 @@ export default function FileComplaint() {
 
       setResult({ ...complaint, linkedToExistingCase, assessmentFailed });
       setNarrative('');
+      appendedSegmentCount.current = 0;
       discardRecording();
       setDocFile(null);
     } catch (err) {
@@ -185,55 +187,62 @@ export default function FileComplaint() {
       </div>
 
       <div>
-        <div style={{ fontSize: 13, color: '#8b91a3', marginBottom: 8 }}>Tell us what happened, in your own words (optional if you record a voice message below)</div>
+        <div style={{ fontSize: 13, color: '#8b91a3', marginBottom: 8 }}>Tell us what happened, in your own words (or speak instead, using the button below)</div>
         <textarea
           value={narrative}
           onChange={(e) => setNarrative(e.target.value)}
           placeholder="Write here... this is kept confidential"
           style={{ width: '100%', minHeight: 110, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.1)', borderRadius: 12, color: '#eef0f6', padding: 14, fontSize: 14, fontFamily: 'inherit', resize: 'vertical' }}
         />
+        {live.isActive && live.partialText && (
+          <div style={{ marginTop: 6, fontSize: 12.5, color: '#8b91a3', fontStyle: 'italic' }}>
+            {live.partialText}
+            <span className="tsa-pulse-dot" style={{ display: 'inline-block', width: 7, height: 12, background: 'oklch(0.65 0.14 200)', marginLeft: 4, verticalAlign: 'middle' }} />
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ fontSize: 13, color: '#8b91a3' }}>Prefer to speak instead of type? You can record a voice message.</div>
+        <div style={{ fontSize: 13, color: '#8b91a3' }}>Prefer to speak instead of type? Your words appear above as you talk.</div>
 
-        {!audioUrl && !recording && (
-          <div onClick={startRecording} style={{ ...optionBtn, cursor: 'pointer' }}>
+        {!live.isActive && (
+          <div onClick={startSpeaking} style={{ ...optionBtn, cursor: 'pointer' }}>
             <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'oklch(0.65 0.14 200 / 0.25)', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>&#127908;</div>
-            Record a Voice Message
+            Speak Instead of Typing
           </div>
         )}
 
-        {recording && (
+        {live.isActive && (
           <div style={{ ...optionBtn, cursor: 'default', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'oklch(0.62 0.21 25)' }} className="tsa-pulse-dot" />
-              Recording… {formatSeconds(recordSeconds)}
+              Listening… {formatElapsed(elapsedSeconds)}
             </div>
-            <button onClick={stopRecording} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'oklch(0.62 0.21 25)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Stop</button>
+            <button onClick={live.stop} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'oklch(0.62 0.21 25)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Stop</button>
           </div>
         )}
 
-        {audioUrl && !recording && (
+        {live.error && <div style={{ fontSize: 12, color: 'oklch(0.75 0.18 25)' }}>{live.error}</div>}
+
+        <div style={{ fontSize: 11.5, color: '#5c6178' }}>
+          Words are transcribed as you speak and never leave this device as raw audio for that purpose - only the text is used. Prefer to send the recording itself too? You still can:
+        </div>
+
+        {!audioUrl ? (
+          <label style={{ fontSize: 12.5, color: '#8b91a3', textDecoration: 'underline', cursor: 'pointer', alignSelf: 'flex-start' }}>
+            attach an audio file
+            <input type="file" accept="audio/*" hidden onChange={(e) => handleAudioUpload(e.target.files?.[0] ?? null)} />
+          </label>
+        ) : (
           <div style={{ ...optionBtn, cursor: 'default', flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'oklch(0.72 0.15 145 / 0.25)', flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>&#9989;</div>
-              Voice message ready
+              Audio file attached
             </div>
             <audio controls src={audioUrl} style={{ width: '100%', height: 36 }} />
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={discardRecording} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid rgba(255,255,255,.15)', background: 'transparent', color: '#c4c8d4', fontSize: 12.5, cursor: 'pointer' }}>Remove</button>
-              <button onClick={startRecording} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid rgba(255,255,255,.15)', background: 'transparent', color: '#c4c8d4', fontSize: 12.5, cursor: 'pointer' }}>Re-record</button>
-            </div>
+            <button onClick={discardRecording} style={{ padding: '8px 0', borderRadius: 8, border: '1px solid rgba(255,255,255,.15)', background: 'transparent', color: '#c4c8d4', fontSize: 12.5, cursor: 'pointer' }}>Remove</button>
           </div>
         )}
-
-        {micError && <div style={{ fontSize: 12, color: 'oklch(0.75 0.18 25)' }}>{micError}</div>}
-
-        <label style={{ fontSize: 12.5, color: '#8b91a3', textDecoration: 'underline', cursor: 'pointer', alignSelf: 'flex-start' }}>
-          or upload an audio file instead
-          <input type="file" accept="audio/*" hidden onChange={(e) => handleAudioUpload(e.target.files?.[0] ?? null)} />
-        </label>
 
         <label style={{ ...optionBtn, cursor: 'pointer' }}>
           <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'oklch(0.72 0.15 145 / 0.25)', flex: 'none' }} />

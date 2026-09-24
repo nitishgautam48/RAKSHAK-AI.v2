@@ -126,7 +126,29 @@ def _build_pipeline():
         nlp = spacy.blank("xx")
         nlp.add_pipe("sentencizer")
 
-        triggers = sorted({n.lower() for n in NEGATIONS} | {"nobody", "no one", "none", "not anymore"})
+        # "nobody"/"no one"/"none" were tried as extra triggers here (to
+        # catch "nobody has been hurt") and reverted - a real regression
+        # found by running the full eval harness, not caught by this
+        # module's own narrower test set. nlp_engine.LEXICON's isolation
+        # category deliberately uses "no one"-led phrases as ITS OWN
+        # trigger phrases ("no one helps", "no one will", "will speak to
+        # us") - "No one in the village will speak to us anymore" is the
+        # isolation signal itself, not a negation of anything, but treating
+        # "no one" as a general-purpose negation trigger wrongly suppressed
+        # "will speak to us" whenever it appeared later in the same
+        # sentence (band-3 and consist-2 in mlops/evaluation.py both
+        # regressed this way). Unlike "do not belong" (self-contained
+        # inside one matched phrase, safely excluded already), "no one" and
+        # its target can sit in two separate spans with real distance
+        # between them, so the same self-exclusion protection doesn't
+        # apply. Net effect of reverting: "nobody has been hurt" in
+        # KNOWN_LIMITATIONS limit-1 no longer gets discounted (it did
+        # before this revert) - accepted, since under-fixing one disclosed
+        # case is preferable to a live regression on two previously-passing
+        # ones. "did not threaten" in that same narrative is still
+        # correctly discounted via negspacy's own vetted "not"/"didn't"
+        # triggers, untouched by this revert.
+        triggers = sorted({n.lower() for n in NEGATIONS})
         terminations = sorted(set(_UNIVERSAL_TERMINATIONS) | set(_EXTRA_ENGLISH_TERMINATIONS))
         # negspacy's built-in English termset (from its own reviewed
         # preceding/following/pseudo-negation lists) is layered UNDER our
@@ -136,8 +158,20 @@ def _build_pipeline():
         from negspacy.termsets import termset
 
         en_patterns = termset("en").get_patterns()
+        # "no one"/"nobody" are added as PSEUDO-negations (negspacy's "looks
+        # like a trigger but ignore it" list, checked before and taking
+        # priority over the shorter/weaker match) rather than removed
+        # outright. negspacy's own built-in `preceding_negations` already
+        # contains the bare word "no" - which still matches as a prefix
+        # inside "no one" even after the custom-trigger revert above, so
+        # "no one in the village will speak to us anymore" kept getting
+        # wrongly suppressed until this was added. Verified directly: this
+        # correctly leaves "no one"/"nobody" unnegated (the isolation-signal
+        # case above, and "nobody has been hurt") while leaving plain "no"
+        # untouched as a genuine trigger elsewhere ("no threats were made
+        # against us" is still correctly negated).
         custom_termset = {
-            "pseudo_negations": en_patterns["pseudo_negations"],
+            "pseudo_negations": sorted(set(en_patterns["pseudo_negations"]) | {"no one", "nobody"}),
             "preceding_negations": sorted(set(en_patterns["preceding_negations"]) | set(triggers)),
             "following_negations": en_patterns["following_negations"],
             "termination": sorted(set(en_patterns["termination"]) | set(terminations)),

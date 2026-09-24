@@ -24,13 +24,27 @@ def _span(text: str, term: str) -> tuple[int, int]:
 
 
 def test_negated_keyword_is_detected():
-    text = "i want to be clear that they did not threaten us and nobody has been hurt."
+    text = "i want to be clear that they did not threaten us."
     threaten_span = _span(text, "threaten")
-    hurt_span = _span(text, "hurt")
-    result = negation_engine.find_negated_spans(text, [threaten_span, hurt_span])
+    result = negation_engine.find_negated_spans(text, [threaten_span])
     assert result.available is True
     assert threaten_span in result.negated_spans
-    assert hurt_span in result.negated_spans
+
+
+def test_no_one_is_not_treated_as_a_generic_negation_trigger():
+    # Regression test for a real bug found by running the full eval
+    # harness: "nobody"/"no one" were tried as extra negation triggers (to
+    # catch "nobody has been hurt") and reverted, because nlp_engine.
+    # LEXICON's isolation category uses "no one"-led phrases as ITS OWN
+    # trigger phrases ("no one helps", "no one will", "will speak to us").
+    # "No one in the village will speak to us anymore" is the isolation
+    # signal itself - treating "no one" as a negation trigger wrongly
+    # suppressed "will speak to us" here.
+    text = "no one in the village will speak to us anymore."
+    target_span = _span(text, "will speak to us")
+    result = negation_engine.find_negated_spans(text, [target_span])
+    assert result.available is True
+    assert target_span not in result.negated_spans
 
 
 def test_real_unnegated_threat_is_not_suppressed():

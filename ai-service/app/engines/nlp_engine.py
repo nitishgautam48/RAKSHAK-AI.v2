@@ -93,7 +93,18 @@ LEXICON: dict[str, list[str]] = {
     ],
     "hopelessness": [
         "no hope", "give up", "hopeless", "no point", "nothing left", "cannot go on", "helpless",
-        "no way out", "any way out", "don't know what to do", "no solution", "kuch nahi bacha",
+        "no way out", "don't know what to do", "no solution", "kuch nahi bacha",
+        # "any way out" (bare) was removed - it's a negative-polarity phrase
+        # that only means anything preceded by a negator ("don't see any way
+        # out"), same class of issue as "do not belong" below. Scoped
+        # negation (negation_engine.py) correctly detects "don't...any way
+        # out" as negated and discounts it, which defeated the phrase's own
+        # purpose (a real eval-harness regression: band-3 stayed LOW instead
+        # of MODERATE). Fixed the same way "do not belong" already was: bake
+        # the negator into the matched phrase itself so it's self-contained
+        # and immune to negation scoping.
+        "don't see any way out", "dont see any way out", "do not see any way out",
+        "can't see any way out", "cant see any way out", "cannot see any way out",
         # "don't want to live" was a real gap found via live testing (a real
         # narrative - "i don't want to live this life anymore" - scored zero
         # hopelessness despite being a textbook example of it). "dont" and
@@ -319,7 +330,45 @@ LEXICON: dict[str, list[str]] = {
         "पानी नहीं लेने दिया", "मंदिर में प्रवेश नहीं", "कुएं से पानी नहीं भरने दिया",
         "दुकान में सामान नहीं दिया", "बस में बैठने नहीं दिया",  # Hindi
     ],
+    # A keyword scorer can only detect fear the narrator explicitly names
+    # in a word it recognizes ("afraid", "terrified") - it cannot infer
+    # fear or severity from an objectively severe event described
+    # factually, without the narrator using an emotion word at all. Real
+    # example this closes (see mlops/evaluation.py's KNOWN_LIMITATIONS
+    # limit-4): "Armed men came to our house at night, beat my brother
+    # unconscious, and said they would kill the rest of us if we stayed"
+    # reached HIGH on threat/physical-harm keywords alone but never HIGHER,
+    # because fear_score stayed at 0 - no first-person emotion word
+    # appears anywhere in that sentence, even though the situation
+    # described is objectively terrifying. This category is facts, not
+    # feelings: circumstances a reasonable person would find frightening
+    # regardless of whether the narrator says so. See analyze()'s
+    # blend-into-fear_score step below - it can only RAISE fear_score
+    # (via max()), the same "additive, never suppressive" rule every other
+    # blended signal in this pipeline (semantic/LLM engines) already
+    # follows, so this can never lower a fear read a real emotion word
+    # already produced.
+    #
+    # ENGLISH-PRIMARY, EVEN MORE SO THAN THE REST OF THIS LEXICON: writing
+    # "objectively frightening circumstance" phrases well cross-lingually
+    # needs more cultural/linguistic judgment than a translated emotion
+    # word does - the handful of Hindi entries below are a starting point,
+    # not reviewed by a native speaker, same caveat as the rest of this
+    # lexicon but more pronounced here.
+    "objective_severity": [
+        "armed men", "armed with", "group of men", "gang of men", "multiple men", "several men",
+        "came to our house at night", "broke into our house", "broke into the house", "forced their way in",
+        "dragged me", "dragged her", "dragged him", "held me down", "held her down", "pinned me down",
+        "in front of my children", "in front of my family", "thought i would die", "thought i was going to die",
+        "no one came to help", "left me for dead", "surrounded me", "surrounded her", "blocked my way",
+        "chased me", "chased her", "cornered me", "cornered her", "beat him unconscious", "beat her unconscious",
+        "हथियार लेकर आए", "रात में घर में घुस आए", "घसीट कर ले गए", "जान से मारने की कोशिश",  # Hindi
+    ],
 }
+
+# Blended into fear_score in analyze() below, not given its own SVI weight -
+# see the category's own docstring comment above for why.
+_OBJECTIVE_SEVERITY_FEAR_WEIGHT = 0.75
 
 # Every term added by task #118 for the six languages the module docstring's
 # CAVEAT applies to (Bengali, Marathi, Telugu, Tamil, Kannada, Odia) - used
@@ -880,9 +929,14 @@ def analyze(text: str) -> NlpIndicators:
     # field; the UI label is what actually needed fixing.
     confidence = float(min(95.0, 55 + min(30, word_count / 3)))
 
+    # See "objective_severity" category's own docstring comment (in
+    # LEXICON above) for why this blend exists - additive only, via max(),
+    # so a real emotion-word-driven fear read is never lowered by this.
+    fear_score = max(scaled("fear"), round(_OBJECTIVE_SEVERITY_FEAR_WEIGHT * scaled("objective_severity"), 1))
+
     return NlpIndicators(
         trauma_score=trauma_score,
-        fear_score=scaled("fear"),
+        fear_score=fear_score,
         isolation_score=scaled("isolation"),
         threat_score=threat_score,
         hopelessness_score=scaled("hopelessness"),

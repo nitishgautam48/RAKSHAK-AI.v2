@@ -7,7 +7,7 @@ import { parsePagination, paginated } from '../lib/pagination.js';
 import { qStr, pStr } from '../lib/query.js';
 import { genComplaintCode, genCaseNumber } from '../lib/codes.js';
 import { recordAudit } from '../services/audit.service.js';
-import { broadcastCaseEvent } from '../services/socket.service.js';
+import { broadcastCaseEvent, broadcastToVictim } from '../services/socket.service.js';
 import { recordConsent } from '../services/consent.service.js';
 import { victimToDto, assignmentUserSelect } from '../lib/dto.js';
 import { RoleName } from '@prisma/client';
@@ -171,13 +171,21 @@ complaintsRouter.patch(
   asyncHandler(async (req, res) => {
     const body = statusSchema.parse(req.body);
     const complaint = await prisma.complaint.update({ where: { id: pStr(req, 'id') }, data: { status: body.status } });
-    const kase = await prisma.case.findUnique({ where: { complaintId: complaint.id } });
+    const kase = await prisma.case.findUnique({ where: { complaintId: complaint.id }, include: { victim: { include: { profile: true } } } });
     if (kase) {
       await prisma.case.update({ where: { id: kase.id }, data: { status: body.status } });
       await prisma.caseTimeline.create({
         data: { caseId: kase.id, actorId: req.user!.sub, eventType: 'status_change', summary: `Status changed to ${body.status.replace(/_/g, ' ')}.` },
       });
       broadcastCaseEvent(kase.id, 'case:status_changed', { caseId: kase.id, status: body.status });
+      // broadcastCaseEvent only reaches the 'government' room and whoever
+      // has explicitly joined 'case:{id}' (gov staff, via case:subscribe -
+      // the survivor portal never calls that) - without this, the
+      // survivor's own Case Timeline/Legal Aid pages never learn their
+      // case's status changed until they manually reload. See
+      // broadcastToVictim's other real use in cases.routes.ts's identical
+      // case:timeline_update handling.
+      if (kase.victim.profile) broadcastToVictim(kase.victim.profile.userId, 'case:status_changed', { caseId: kase.id, status: body.status });
     }
     await recordAudit({ req, action: 'UPDATE', entityType: 'Complaint', entityId: complaint.id, meta: { status: body.status } });
     res.json(complaint);
@@ -189,13 +197,14 @@ complaintsRouter.patch(
   requireRoles(RoleName.HELPLINE_OPERATOR, RoleName.DISTRICT_OFFICER, RoleName.ADMINISTRATOR, RoleName.SOCIAL_JUSTICE_OFFICER),
   asyncHandler(async (req, res) => {
     const complaint = await prisma.complaint.update({ where: { id: pStr(req, 'id') }, data: { status: 'ESCALATED', riskLevel: 'CRITICAL' } });
-    const kase = await prisma.case.findUnique({ where: { complaintId: complaint.id } });
+    const kase = await prisma.case.findUnique({ where: { complaintId: complaint.id }, include: { victim: { include: { profile: true } } } });
     if (kase) {
       await prisma.case.update({ where: { id: kase.id }, data: { status: 'ESCALATED', riskLevel: 'CRITICAL' } });
       await prisma.caseTimeline.create({
         data: { caseId: kase.id, actorId: req.user!.sub, eventType: 'status_change', summary: 'Case escalated to critical priority.' },
       });
       broadcastCaseEvent(kase.id, 'case:escalated', { caseId: kase.id });
+      if (kase.victim.profile) broadcastToVictim(kase.victim.profile.userId, 'case:escalated', { caseId: kase.id });
     }
     await recordAudit({ req, action: 'UPDATE', entityType: 'Complaint', entityId: complaint.id, meta: { action: 'escalate' } });
     res.json(complaint);

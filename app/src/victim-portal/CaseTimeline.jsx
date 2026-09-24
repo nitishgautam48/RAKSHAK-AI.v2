@@ -31,9 +31,15 @@ export default function CaseTimeline() {
     socket.on('case:status_changed', refresh);
     socket.on('case:timeline_update', refresh);
     socket.on('assessment:new', refresh);
+    // Legal aid assignment/hearing-scheduled writes a real timeline entry
+    // but only ever broadcasts 'legal:update' (see legalAid.routes.ts's
+    // notifyVictimOfCase), not 'case:timeline_update' - without this, a new
+    // hearing wouldn't show up here live.
+    socket.on('legal:update', refresh);
     return () => {
       socket.off('case:status_changed', refresh);
       socket.off('case:timeline_update', refresh);
+      socket.off('legal:update', refresh);
       socket.off('assessment:new', refresh);
     };
   }, []);

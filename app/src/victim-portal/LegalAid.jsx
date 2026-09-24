@@ -22,9 +22,15 @@ export default function LegalAid() {
     if (!socket) return undefined;
     socket.on('case:status_changed', reload);
     socket.on('case:timeline_update', reload);
+    // Legal aid assignment/hearing/compensation updates broadcast
+    // 'legal:update' specifically (see legalAid.routes.ts) - this is the
+    // one that actually reaches this page for the events it most cares
+    // about.
+    socket.on('legal:update', reload);
     return () => {
       socket.off('case:status_changed', reload);
       socket.off('case:timeline_update', reload);
+      socket.off('legal:update', reload);
     };
   }, []);
 

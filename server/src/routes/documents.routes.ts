@@ -7,7 +7,7 @@ import { asyncHandler, ApiError } from '../middleware/error.js';
 import { qStr, pStr } from '../lib/query.js';
 import { storage } from '../services/storage.service.js';
 import { recordAudit } from '../services/audit.service.js';
-import { broadcastCaseEvent } from '../services/socket.service.js';
+import { broadcastCaseEvent, broadcastToVictim } from '../services/socket.service.js';
 import type { DocumentType } from '@prisma/client';
 
 export const documentsRouter = Router();
@@ -61,10 +61,15 @@ documentsRouter.post('/', upload.single('file'), asyncHandler(async (req, res) =
   if (body.complaintId) {
     const complaint = await prisma.complaint.findUnique({ where: { id: body.complaintId } });
     if (complaint) {
-      const kase = await prisma.case.findUnique({ where: { complaintId: body.complaintId } });
+      const kase = await prisma.case.findUnique({ where: { complaintId: body.complaintId }, include: { victim: { include: { profile: true } } } });
       if (kase) {
         await prisma.caseTimeline.create({ data: { caseId: kase.id, eventType: 'document', summary: `Document uploaded: ${body.title}` } });
         broadcastCaseEvent(kase.id, 'document:new', doc);
+        // Same gap as case:status_changed - broadcastCaseEvent alone never
+        // reaches the survivor's own socket (they never join case:{id});
+        // without this, My Documents' live-refresh listener never actually
+        // fires when staff upload something to their case.
+        if (kase.victim.profile) broadcastToVictim(kase.victim.profile.userId, 'document:new', doc);
       }
     }
   }

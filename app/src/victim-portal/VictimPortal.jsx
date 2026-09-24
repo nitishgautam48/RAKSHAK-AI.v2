@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import BrandMark from '../components/BrandMark';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 import { VICTIM_TABS } from '../data/constants';
 
 function timeAgo(iso) {
@@ -42,6 +43,20 @@ export default function VictimPortal({ onBack, initialTab = 'dashboard' }) {
     api.get('/api/notifications?pageSize=20')
       .then((r) => { setNotifications(r.items ?? []); setUnread(r.unread ?? 0); })
       .catch(() => {});
+  }, []);
+
+  // Fetch-once-on-mount only, same staleness this session fixed elsewhere -
+  // a notification created while the portal is already open (e.g. a new
+  // counselling session) previously only appeared after a manual reload.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const onNew = (notification) => {
+      setNotifications((prev) => [notification, ...prev].slice(0, 20));
+      setUnread((prev) => prev + 1);
+    };
+    socket.on('notification:new', onNew);
+    return () => socket.off('notification:new', onNew);
   }, []);
 
   const openNotifications = () => {

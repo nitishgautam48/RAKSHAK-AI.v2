@@ -1,4 +1,5 @@
 import Hoverable from './Hoverable';
+import NotificationBell from './NotificationBell';
 import { LANGS } from '../data/constants';
 
 export default function Topbar({ title, role, userName, lang, onLangChange, onLogout, onOpenMobileSidebar }) {
@@ -26,6 +27,7 @@ export default function Topbar({ title, role, userName, lang, onLangChange, onLo
           ))}
         </select>
         <div style={{ fontSize: 12.5, color: '#8b91a3', padding: '8px 10px', borderRadius: 7, background: 'rgba(255,255,255,.04)' }}>{roleLabel}</div>
+        <NotificationBell />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 14, borderLeft: '1px solid rgba(255,255,255,.08)' }}>
           <div title={userName} style={{ width: 30, height: 30, borderRadius: '50%', background: 'oklch(0.5 0.1 235)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: '600 12px Sora,sans-serif' }}>{userInitials}</div>
           {onLogout && (

@@ -9,7 +9,7 @@ import { genComplaintCode, genCaseNumber } from '../lib/codes.js';
 import { recordAudit } from '../services/audit.service.js';
 import { broadcastCaseEvent } from '../services/socket.service.js';
 import { recordConsent } from '../services/consent.service.js';
-import { victimToDto } from '../lib/dto.js';
+import { victimToDto, assignmentUserSelect } from '../lib/dto.js';
 import { RoleName } from '@prisma/client';
 import { findOpenCaseForVictim } from '../services/caseLinking.service.js';
 import { notify } from '../services/notification.service.js';
@@ -39,7 +39,7 @@ complaintsRouter.get('/', asyncHandler(async (req, res) => {
       skip,
       take,
       orderBy: { createdAt: 'desc' },
-      include: { victim: true, case: { include: { assignments: { include: { user: true }, where: { active: true } } } } },
+      include: { victim: true, case: { include: { assignments: { include: { user: { select: assignmentUserSelect } }, where: { active: true } } } } },
     }),
     prisma.complaint.count({ where }),
   ]);

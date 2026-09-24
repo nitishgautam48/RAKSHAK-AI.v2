@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { IVRS_STEPS } from '../data/constants';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const CHANNEL_LABELS = { helpline: 'Helpline (14566)', portal: 'Survivor Portal', 'field-visit': 'Field Visit' };
@@ -10,8 +11,16 @@ export default function ChannelMonitoring() {
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const reload = () => api.get('/api/analytics/channel-breakdown').then(setChannels).catch(() => {}).finally(() => setLoading(false));
+
+  useEffect(() => { reload(); }, []);
+
+  // A new complaint on any channel shifts this breakdown immediately.
   useEffect(() => {
-    api.get('/api/analytics/channel-breakdown').then(setChannels).catch(() => {}).finally(() => setLoading(false));
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('complaint:new', reload);
+    return () => socket.off('complaint:new', reload);
   }, []);
 
   const total = channels.reduce((a, c) => a + c.count, 0) || 1;

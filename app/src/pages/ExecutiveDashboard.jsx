@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const RISK_COLORS = { LOW: 'oklch(0.72 0.15 145)', MODERATE: 'oklch(0.8 0.15 95)', HIGH: 'oklch(0.7 0.17 55)', CRITICAL: 'oklch(0.62 0.21 25)' };
@@ -45,28 +46,44 @@ export default function ExecutiveDashboard() {
   const [districtRisk, setDistrictRisk] = useState([]);
   const [mlopsEval, setMlopsEval] = useState(null);
 
+  const reload = () => Promise.all([
+    api.get('/api/analytics/overview'),
+    api.get('/api/gis/heatmap'),
+    api.get('/api/analytics/state-rankings'),
+    api.get('/api/analytics/monthly-trend'),
+    api.get('/api/analytics/svi-trend'),
+    api.get('/api/interventions'),
+    api.get('/api/analytics/recommendations-overview'),
+    api.get('/api/analytics/district-risk'),
+    api.get('/api/ai-monitoring/eval').catch(() => null),
+  ]).then(([ov, gis, sr, mt, st, iv, reco, dr, ev]) => {
+    setOverview(ov);
+    setHeatmap(gis);
+    setStateRankings(sr);
+    setMonthlyTrend(mt);
+    setSviTrend(st);
+    setInterventions(iv);
+    setRecoOverview(reco);
+    setDistrictRisk(dr);
+    setMlopsEval(ev);
+  }).catch(() => {});
+
+  useEffect(() => { reload(); }, []);
+
+  // National KPIs and the intervention list shift with every new complaint
+  // or re-scored assessment - same staleness class as RiskIntelligence.
   useEffect(() => {
-    Promise.all([
-      api.get('/api/analytics/overview'),
-      api.get('/api/gis/heatmap'),
-      api.get('/api/analytics/state-rankings'),
-      api.get('/api/analytics/monthly-trend'),
-      api.get('/api/analytics/svi-trend'),
-      api.get('/api/interventions'),
-      api.get('/api/analytics/recommendations-overview'),
-      api.get('/api/analytics/district-risk'),
-      api.get('/api/ai-monitoring/eval').catch(() => null),
-    ]).then(([ov, gis, sr, mt, st, iv, reco, dr, ev]) => {
-      setOverview(ov);
-      setHeatmap(gis);
-      setStateRankings(sr);
-      setMonthlyTrend(mt);
-      setSviTrend(st);
-      setInterventions(iv);
-      setRecoOverview(reco);
-      setDistrictRisk(dr);
-      setMlopsEval(ev);
-    }).catch(() => {});
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('assessment:new', reload);
+    socket.on('complaint:new', reload);
+    socket.on('case:status_changed', reload);
+    return () => {
+      socket.off('assessment:new', reload);
+      socket.off('complaint:new', reload);
+      socket.off('case:status_changed', reload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const kpis = overview ? [

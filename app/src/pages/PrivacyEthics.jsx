@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const SCOPE_LABEL = { ai_assessment: 'AI Assessment Processing', data_sharing: 'Cross-agency Data Sharing' };
@@ -12,16 +13,29 @@ export default function PrivacyEthics() {
   const [auditSummary, setAuditSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const reload = () => Promise.all([
+    api.get('/api/consent/stats'),
+    api.get('/api/meta/retention-policy'),
+    api.get('/api/meta/audit-summary'),
+    api.get('/api/admin/audit-log?pageSize=15').catch((e) => { if (e.status === 403) setAuditForbidden(true); return null; }),
+  ])
+    .then(([c, r, s, a]) => { setConsent(c); setRetention(r); setAuditSummary(s); setAuditLog(a); })
+    .catch(() => {})
+    .finally(() => setLoading(false));
+
+  useEffect(() => { reload(); }, []);
+
+  // Every new complaint records consent + audit-log entries this page
+  // summarizes - refresh so a compliance officer isn't reviewing stale counts.
   useEffect(() => {
-    Promise.all([
-      api.get('/api/consent/stats'),
-      api.get('/api/meta/retention-policy'),
-      api.get('/api/meta/audit-summary'),
-      api.get('/api/admin/audit-log?pageSize=15').catch((e) => { if (e.status === 403) setAuditForbidden(true); return null; }),
-    ])
-      .then(([c, r, s, a]) => { setConsent(c); setRetention(r); setAuditSummary(s); setAuditLog(a); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('complaint:new', reload);
+    socket.on('assessment:new', reload);
+    return () => {
+      socket.off('complaint:new', reload);
+      socket.off('assessment:new', reload);
+    };
   }, []);
 
   return (

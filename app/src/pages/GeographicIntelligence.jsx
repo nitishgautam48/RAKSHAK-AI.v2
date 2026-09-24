@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Hoverable from '../components/Hoverable';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const selectStyle = { background: 'rgba(255,255,255,.05)', border: '1px solid rgba(255,255,255,.1)', color: '#eef0f6', fontSize: 12.5, padding: '8px 12px', borderRadius: 7 };
@@ -20,12 +21,30 @@ export default function GeographicIntelligence() {
   const [selectedState, setSelectedState] = useState(null);
   const [geography, setGeography] = useState({ states: [] });
 
+  const reload = () => Promise.all([
+    api.get('/api/gis/heatmap'),
+    api.get('/api/analytics/district-risk'),
+    api.get('/api/meta/geography'),
+  ]).then(([hm, dr, geo]) => { setHeatmap(hm); setDistrictRisk(dr); setGeography(geo); }).catch(() => {});
+
+  useEffect(() => { reload(); }, []);
+
+  // Every new complaint or re-scored assessment shifts a district's active-
+  // case count and risk band on this map - same staleness class as
+  // RiskIntelligence/ExecutiveDashboard, and the one the user specifically
+  // flagged as stale.
   useEffect(() => {
-    Promise.all([
-      api.get('/api/gis/heatmap'),
-      api.get('/api/analytics/district-risk'),
-      api.get('/api/meta/geography'),
-    ]).then(([hm, dr, geo]) => { setHeatmap(hm); setDistrictRisk(dr); setGeography(geo); }).catch(() => {});
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('assessment:new', reload);
+    socket.on('complaint:new', reload);
+    socket.on('case:status_changed', reload);
+    return () => {
+      socket.off('assessment:new', reload);
+      socket.off('complaint:new', reload);
+      socket.off('case:status_changed', reload);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

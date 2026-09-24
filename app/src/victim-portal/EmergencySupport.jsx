@@ -1,17 +1,38 @@
 import { useEffect, useState } from 'react';
-import { NEARBY_SERVICES, EMERGENCY_CONTACTS } from '../data/constants';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/AuthContext';
 
 export default function EmergencySupport() {
   const { user } = useAuth();
   const [location, setLocation] = useState(null);
+  const [assignments, setAssignments] = useState([]);
+  const [centers, setCenters] = useState([]);
   const [sosStatus, setSosStatus] = useState('idle'); // idle | sending | sent | error
 
   useEffect(() => {
     if (!user?.victimId) return;
-    api.get('/api/cases/mine').then((k) => setLocation({ state: k.victim.state, district: k.victim.district })).catch(() => {});
+    api.get('/api/cases/mine')
+      .then((k) => {
+        setLocation({ state: k.victim.state, district: k.victim.district });
+        setAssignments(k.assignments ?? []);
+      })
+      .catch(() => {});
   }, [user]);
+
+  // Real support centers for the victim's own district - the same
+  // /api/gis/support-centers data the government Geographic Intelligence
+  // page uses, not the hardcoded "1.8 km away" placeholder list this page
+  // used to show (there is no geolocation/geocoding in this build, so real
+  // distances genuinely can't be computed - listing real centers without a
+  // fabricated distance is the honest alternative).
+  useEffect(() => {
+    if (!location?.state) return;
+    const params = new URLSearchParams({ state: location.state, ...(location.district ? { district: location.district } : {}) });
+    api.get(`/api/gis/support-centers?${params}`).then(setCenters).catch(() => setCenters([]));
+  }, [location]);
+
+  const officer = assignments.find((a) => a.role === 'DISTRICT_OFFICER' || a.role === 'INVESTIGATING_OFFICER')?.user;
+  const counsellor = assignments.find((a) => a.role === 'COUNSELLOR')?.user;
 
   const triggerSos = async () => {
     setSosStatus('sending');
@@ -44,24 +65,30 @@ export default function EmergencySupport() {
         <button onClick={triggerSos} style={{ padding: 16, borderRadius: 12, border: '1px solid rgba(255,255,255,.15)', background: 'rgba(255,255,255,.05)', color: '#eef0f6', font: "600 14px 'IBM Plex Sans',sans-serif", cursor: 'pointer' }}>Request Immediate Protection</button>
       </div>
       <div style={{ width: '100%', marginTop: 24, textAlign: 'left' }}>
-        <div style={{ font: '700 15px Sora,sans-serif', marginBottom: 12 }}>Support Services Near You</div>
-        <div style={{ width: '100%', height: 110, borderRadius: 12, border: '1px dashed rgba(255,255,255,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#5c6178', fontFamily: "'IBM Plex Mono',monospace", marginBottom: 14 }}>
-          map placeholder — nearby services
-        </div>
+        <div style={{ font: '700 15px Sora,sans-serif', marginBottom: 2 }}>Support Services in {location?.district || 'Your District'}{location?.state ? `, ${location.state}` : ''}</div>
+        <div style={{ fontSize: 11, color: '#5c6178', marginBottom: 14 }}>Real registered centers for your district - no live map/geolocation in this build, so distances are not shown.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {NEARBY_SERVICES.map((ns) => (
-            <div key={ns.type} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 11, color: '#7d8399', marginBottom: 4 }}>{ns.type}</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{ns.name}</div>
-              <div style={{ fontSize: 12, color: '#8b91a3' }}>{ns.meta} &middot; {ns.contact}</div>
+          {centers.length === 0 && <div style={{ color: '#5c6178', fontSize: 12.5 }}>No support centers on file for your district yet - call the helpline below.</div>}
+          {centers.map((c) => (
+            <div key={c.id} style={{ background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 11, color: '#7d8399', marginBottom: 4, textTransform: 'uppercase' }}>{c.type.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{c.name}</div>
+              <div style={{ fontSize: 12, color: '#8b91a3' }}>{c.district}, {c.state}{c.phone ? ` · ${c.phone}` : ''}</div>
             </div>
           ))}
         </div>
         <div style={{ font: '700 15px Sora,sans-serif', margin: '20px 0 12px' }}>Emergency Contacts</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {EMERGENCY_CONTACTS.map((ec) => (
-            <div key={ec.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.06)' }}><div style={{ color: '#8b91a3' }}>{ec.label}</div><div>{ec.value}</div></div>
-          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.06)' }}><div style={{ color: '#8b91a3' }}>National Helpline</div><div>14566</div></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.06)' }}><div style={{ color: '#8b91a3' }}>State Helpline</div><div>181</div></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+            <div style={{ color: '#8b91a3' }}>District Emergency Officer</div>
+            <div>{officer ? `${officer.fullName}${officer.mobileNumber ? ` · ${officer.mobileNumber}` : ''}` : 'Not yet assigned'}</div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,.06)' }}>
+            <div style={{ color: '#8b91a3' }}>Assigned Counsellor</div>
+            <div>{counsellor ? `${counsellor.fullName}${counsellor.mobileNumber ? ` · ${counsellor.mobileNumber}` : ''}` : 'Not yet assigned'}</div>
+          </div>
         </div>
       </div>
     </div>

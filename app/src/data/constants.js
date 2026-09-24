@@ -141,13 +141,3 @@ export const LEGAL_FAQ = [
   { q: 'How do I apply for compensation?', a: 'Compensation is applied for automatically once your FIR is registered under the Act. You can track its status in the Compensation Tracking section.' },
 ];
 
-export const NEARBY_SERVICES = [
-  { type: 'Nearest Police Station', name: 'Bhojpur Sadar Police Station', meta: '1.8 km away', contact: '+91 612-2xxxxxx' },
-  { type: 'Nearest Counselling Center', name: 'District Women & Child Support Center', meta: 'Open now · 2.4 km away', contact: '+91 612-2xxxxxx' },
-  { type: 'Nearest Legal Aid Office', name: 'District Legal Services Authority', meta: '3.1 km away', contact: '+91 612-2xxxxxx' },
-  { type: 'Nearest Shelter Home', name: 'Sakhi One Stop Centre', meta: 'Beds available · 4.6 km away', contact: '+91 612-2xxxxxx' },
-];
-export const EMERGENCY_CONTACTS = [
-  { label: 'National Helpline', value: '14566' }, { label: 'State Helpline', value: '181' },
-  { label: 'District Emergency Officer', value: 'Insp. Rathi · +91 98xxxxxx01' }, { label: 'Assigned Counsellor', value: 'Meera Nair · +91 98xxxxxx45' },
-];

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 
@@ -32,16 +33,27 @@ export default function ReportsAnalytics() {
   const [recos, setRecos] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const reload = () => Promise.all([
+    api.get('/api/analytics/monthly-trend'),
+    api.get('/api/analytics/state-rankings'),
+    api.get('/api/analytics/district-risk'),
+    api.get('/api/analytics/recommendations-overview'),
+  ])
+    .then(([m, s, d, r]) => { setMonthly(m); setStateRankings(s); setDistrictRisk(d); setRecos(r); })
+    .catch(() => {})
+    .finally(() => setLoading(false));
+
+  useEffect(() => { reload(); }, []);
+
   useEffect(() => {
-    Promise.all([
-      api.get('/api/analytics/monthly-trend'),
-      api.get('/api/analytics/state-rankings'),
-      api.get('/api/analytics/district-risk'),
-      api.get('/api/analytics/recommendations-overview'),
-    ])
-      .then(([m, s, d, r]) => { setMonthly(m); setStateRankings(s); setDistrictRisk(d); setRecos(r); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('assessment:new', reload);
+    socket.on('complaint:new', reload);
+    return () => {
+      socket.off('assessment:new', reload);
+      socket.off('complaint:new', reload);
+    };
   }, []);
 
   return (

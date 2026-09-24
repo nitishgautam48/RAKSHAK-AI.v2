@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 const card = { background: 'rgba(255,255,255,.035)', border: '1px solid rgba(255,255,255,.07)', borderRadius: 14, padding: 22 };
 const ENGINE_LABEL = { nlp: 'NLP Trauma Engine', voice: 'Voice Analysis Engine', svi: 'SVI Scoring Engine' };
@@ -33,19 +34,29 @@ export default function AiModelMonitoring() {
   const [auditSummary, setAuditSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const reload = () => Promise.all([
+    api.get('/api/ai-monitoring/registry'),
+    api.get('/api/ai-monitoring/eval'),
+    api.get('/api/ai-monitoring/voice-eval'),
+    api.get('/api/ai-monitoring/drift'),
+    api.get('/api/ai-monitoring/degradation'),
+    api.get('/api/ai-monitoring/agreement-stats'),
+    api.get('/api/meta/audit-summary'),
+  ])
+    .then(([r, e, v, d, deg, ag, a]) => { setRegistry(r); setEvalData(e); setVoiceEval(v); setDrift(d); setDegradation(deg); setAgreement(ag); setAuditSummary(a); })
+    .catch(() => {})
+    .finally(() => setLoading(false));
+
+  useEffect(() => { reload(); }, []);
+
+  // Degradation/drift/agreement stats are computed over recent live
+  // assessments - a silent-degrade detector that only ever shows what was
+  // true at page load isn't actually monitoring anything.
   useEffect(() => {
-    Promise.all([
-      api.get('/api/ai-monitoring/registry'),
-      api.get('/api/ai-monitoring/eval'),
-      api.get('/api/ai-monitoring/voice-eval'),
-      api.get('/api/ai-monitoring/drift'),
-      api.get('/api/ai-monitoring/degradation'),
-      api.get('/api/ai-monitoring/agreement-stats'),
-      api.get('/api/meta/audit-summary'),
-    ])
-      .then(([r, e, v, d, deg, ag, a]) => { setRegistry(r); setEvalData(e); setVoiceEval(v); setDrift(d); setDegradation(deg); setAgreement(ag); setAuditSummary(a); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const socket = getSocket();
+    if (!socket) return undefined;
+    socket.on('assessment:new', reload);
+    return () => socket.off('assessment:new', reload);
   }, []);
 
   const ENGINE_DISPLAY_NAME = { stt: 'Speech-to-text', voice_dsp: 'Voice-stress DSP', llm: 'LLM narrative understanding', semantic: 'Semantic paraphrase detection' };

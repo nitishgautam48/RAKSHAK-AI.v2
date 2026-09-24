@@ -5,7 +5,7 @@ import { requireAuth, requireRoles } from '../middleware/auth.js';
 import { asyncHandler, ApiError } from '../middleware/error.js';
 import { parsePagination, paginated } from '../lib/pagination.js';
 import { qStr, pStr } from '../lib/query.js';
-import { victimToDto } from '../lib/dto.js';
+import { victimToDto, assignmentUserSelect } from '../lib/dto.js';
 import { recordAudit } from '../services/audit.service.js';
 import { broadcastCaseEvent, broadcastToVictim } from '../services/socket.service.js';
 import { notify } from '../services/notification.service.js';
@@ -47,7 +47,7 @@ casesRouter.get('/', asyncHandler(async (req, res) => {
       skip,
       take,
       orderBy: { openedAt: 'desc' },
-      include: { victim: true, complaint: true, assignments: { where: { active: true }, include: { user: true } } },
+      include: { victim: true, complaint: true, assignments: { where: { active: true }, include: { user: { select: assignmentUserSelect } } } },
     }),
     prisma.case.count({ where }),
   ]);
@@ -65,7 +65,7 @@ casesRouter.get('/mine', asyncHandler(async (req, res) => {
       victim: true,
       complaint: true,
       timeline: { orderBy: { createdAt: 'desc' }, take: 20 },
-      assignments: { where: { active: true }, include: { user: true } },
+      assignments: { where: { active: true }, include: { user: { select: assignmentUserSelect } } },
       legalAid: { include: { courtCase: { include: { hearings: true } }, compensation: true } },
     },
   });
@@ -80,7 +80,7 @@ casesRouter.get('/:id', asyncHandler(async (req, res) => {
       victim: true,
       complaint: true,
       timeline: { orderBy: { createdAt: 'desc' }, include: { actor: { select: { fullName: true } } } },
-      assignments: { include: { user: true } },
+      assignments: { include: { user: { select: assignmentUserSelect } } },
       assessments: { orderBy: { createdAt: 'desc' }, include: { sviScore: true, riskScore: true } },
     },
   });
